@@ -31,3 +31,25 @@ func TestForwardRejectsInvalidTokenID(t *testing.T) {
 		t.Fatal("expected invalid token ID error")
 	}
 }
+
+func TestForwardStatesDoNotReadFutureTokens(t *testing.T) {
+	model := DemoModel()
+	withoutFuture, err := model.ForwardStates([]int{0, 2, 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	withDifferentFuture, err := model.ForwardStates([]int{0, 2, 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for position := 0; position < 2; position++ {
+		for dimension := range withoutFuture[position] {
+			if math.Abs(withoutFuture[position][dimension]-withDifferentFuture[position][dimension]) > 1e-12 {
+				t.Fatalf("future token changed state at position %d, dimension %d", position, dimension)
+			}
+		}
+	}
+	if math.Abs(withoutFuture[2][0]-withDifferentFuture[2][0]) < 1e-12 && math.Abs(withoutFuture[2][1]-withDifferentFuture[2][1]) < 1e-12 {
+		t.Fatal("expected changed future token to affect its own position")
+	}
+}

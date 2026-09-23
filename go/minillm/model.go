@@ -14,6 +14,20 @@ type Model struct {
 
 // Forward returns next-token probabilities for the final token in tokenIDs.
 func (m Model) Forward(tokenIDs []int) (Vector, error) {
+	states, err := m.ForwardStates(tokenIDs)
+	if err != nil {
+		return nil, err
+	}
+	logits, err := MatVec(m.Output, states[len(states)-1])
+	if err != nil {
+		return nil, err
+	}
+	return Softmax(logits)
+}
+
+// ForwardStates returns the final per-position states before vocabulary output.
+// It is exposed for teaching and invariant tests; it is not a cache.
+func (m Model) ForwardStates(tokenIDs []int) (Matrix, error) {
 	if len(tokenIDs) == 0 {
 		return nil, fmt.Errorf("input sequence must not be empty")
 	}
@@ -75,11 +89,7 @@ func (m Model) Forward(tokenIDs []int) (Vector, error) {
 		states[i], _ = add(states[i], outer) // feed-forward residual
 	}
 
-	logits, err := MatVec(m.Output, states[len(states)-1])
-	if err != nil {
-		return nil, err
-	}
-	return Softmax(logits)
+	return states, nil
 }
 
 // DemoModel returns fixed toy parameters. They make the example reproducible,
