@@ -75,6 +75,50 @@ Measure the actual checkpoint on the intended CPU or GPU instance. Record peak m
 | D. Text generation | Greedy decode, EOS, length/context rules | Repeatable output; edge-case tests pass |
 | E. Efficient serving | KV cache and resource controls | Cached logits match uncached logits; instance benchmark recorded |
 
+## A parallel learning track
+
+Use the roadmap below to turn each concept in these notes into a small experiment. Implement one narrow piece, write an invariant test, and compare its output with the equations before moving on. The goal is understanding and reproducibility, not building a production system immediately.
+
+### 1. Learn a real tokenizer
+
+Study byte-pair encoding (BPE), unigram tokenization, special tokens, vocabulary files, and encode/decode reversibility. Implement a deliberately small tokenizer first:
+
+- normalize a documented input format;
+- split training text into symbols or bytes;
+- count pair frequencies and merge the most frequent pair;
+- save the merge rules and vocabulary;
+- encode text to IDs and decode IDs back to text.
+
+Test whitespace, punctuation, repeated characters, unknown bytes, empty input, and special tokens. Measure token counts by language; tokenizer fragmentation is an important confounder in the language-effect benchmark.
+
+### 2. Move the forward pass to PyTorch
+
+Recreate the Go equations with tensors before attempting a large model. Use `nn.Embedding`, explicit Q/K/V linear layers, a lower-triangular causal mask, a stable vocabulary softmax or `CrossEntropyLoss`, residual connections, and a deliberately chosen pre-norm block. Print tensor shapes at every boundary.
+
+Compare a fixed tiny example against this repository's hand calculation. Use `torch.float64` initially so numerical differences are easy to diagnose. Then compare a small `float32` implementation with a stated tolerance.
+
+### 3. Learn automatic differentiation and optimizers
+
+Start with scalar functions and finite-difference checks. Then verify gradients for a matrix-vector product, ReLU or GELU, softmax cross-entropy, and one attention row. Compare manual derivatives with PyTorch autograd.
+
+Train a tiny character- or token-level model on a toy corpus. Log training and validation loss, use AdamW only after plain gradient descent is understood, and record learning rate, batch size, seed, parameter count, and checkpoint version. A falling training loss alone is not evidence of useful generalization.
+
+### 4. Build the data pipeline
+
+Learn dataset splits, minibatching, padding, attention masks, sequence packing, and next-token target shifting. Make the batch contract explicit:
+
+\[
+\text{input}[b,t]=w_t,\qquad \text{target}[b,t]=w_{t+1}.
+\]
+
+Test that padding contributes no loss, that target tokens are shifted exactly once, and that no batch contains future information through preprocessing. Record dataset provenance, license, preprocessing code, and a content hash.
+
+### 5. Save, load, and verify checkpoints
+
+Study state dictionaries, serialization formats, configuration files, checksums, and version compatibility. Save the tokenizer and model configuration with the weights. On load, reject missing keys, unexpected keys, wrong shapes, non-finite values, unsupported versions, and vocabulary mismatches.
+
+Keep fixed input IDs and expected logits as a checkpoint parity test. Loading a checkpoint is correct only when the inference implementation reproduces the training implementation within an explicit tolerance.
+
 ## Honest status of this repository
 
 The repository currently reaches only the **forward-pass demonstration** stage. It does not yet have a tokenizer, training, checkpoint loading, generation loop, or KV cache. Once those pieces exist and a checkpoint is trained, calling it a small language model is reasonable. Until then, “inference-ready” describes this roadmap, not the current code.
