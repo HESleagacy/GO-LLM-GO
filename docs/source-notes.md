@@ -12,14 +12,14 @@ The section notes track the author's exposition and preserve his emphasis on ord
 
 ## Important qualifications
 
-1. **Embeddings and PCA (source §3.2):** a token embedding is a learned lookup table. Calling it “like PCA” may suggest a statistical procedure that is not generally used to obtain it. Treat the analogy as loose compression intuition only.
-2. **Finite context (source §2.3):** a fixed-context decoder's next-token computation is bounded by its available window. Calling every LLM a finite-order Markov model “in a precise sense” needs the model class and context mechanism specified; retrieval, recurrent state, or memory changes the effective dependency structure.
-3. **Head specialization (source §6):** separate heads permit different projections. The equations do not force distinct linguistic jobs, and heads can be redundant. “Implicit pressure to differentiate” is an intuition, not a theorem.
-4. **Basis terminology (source §6):** calling heads “basis elements” is metaphorical unless independence and spanning properties are established. The attention outputs are learned functions; they are not automatically a mathematical basis.
-5. **Residual gradients (source §7.2):** the identity path contributes a direct derivative route, which often helps optimization. It does not guarantee non-vanishing gradients throughout a network.
-6. **Normalization (source §7.3):** Transformer variants differ in normalization type and placement. LayerNorm, RMSNorm, pre-norm, and post-norm are not interchangeable descriptions of a single fixed rule.
-7. **Optimization (source §10.4):** minibatch gradients can be unbiased under sampling assumptions. This does not guarantee convergence to a global optimum for a deep non-convex model.
-8. **Reasoning and grounding (source §11):** strong categorical statements about what models can or cannot reason are interpretive and task-dependent. The equations establish a predictive computation, not a complete theory of cognition.
+1. **Embeddings and PCA (source Section 3.2):** a token embedding is a learned lookup table. Calling it “like PCA” may suggest a statistical procedure that is not generally used to obtain it. Treat the analogy as loose compression intuition only.
+2. **Finite context (source Section 2.3):** a fixed-context decoder's next-token computation is bounded by its available window. Calling every LLM a finite-order Markov model “in a precise sense” needs the model class and context mechanism specified; retrieval, recurrent state, or memory changes the effective dependency structure.
+3. **Head specialization (source Section 6):** separate heads permit different projections. The equations do not force distinct linguistic jobs, and heads can be redundant. “Implicit pressure to differentiate” is an intuition, not a theorem.
+4. **Basis terminology (source Section 6):** calling heads “basis elements” is metaphorical unless independence and spanning properties are established. The attention outputs are learned functions; they are not automatically a mathematical basis.
+5. **Residual gradients (source Section 7.2):** the identity path contributes a direct derivative route, which often helps optimization. It does not guarantee non-vanishing gradients throughout a network.
+6. **Normalization (source Section 7.3):** Transformer variants differ in normalization type and placement. LayerNorm, RMSNorm, pre-norm, and post-norm are not interchangeable descriptions of a single fixed rule.
+7. **Optimization (source Section 10.4):** minibatch gradients can be unbiased under sampling assumptions. This does not guarantee convergence to a global optimum for a deep non-convex model.
+8. **Reasoning and grounding (source Section 11):** strong categorical statements about what models can or cannot reason are interpretive and task-dependent. The equations establish a predictive computation, not a complete theory of cognition.
 9. **Decoder masking:** the source's opening explanation speaks of the whole context; its mathematical summary restricts aggregation to \(j\le i\). This guide makes the causal mask explicit wherever next-token prediction is implemented.
 
 ## Implementation scope

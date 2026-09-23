@@ -2,7 +2,7 @@
 
 **Question:** Why repeat attention in parallel and in depth instead of using one weighted average?
 
-Breeden §§6–7 use “relations” and layers to explain this. The implementation details below distinguish what the equations permit from what training actually produces.
+Breeden Sections 6–7 use “relations” and layers to explain this. The implementation details below distinguish what the equations permit from what training actually produces.
 
 ## Multiple heads
 
@@ -69,4 +69,4 @@ Let \(X^{(0)}\) be embeddings plus positions and \(X^{(\ell)}=\operatorname{Bloc
 2. Which part of a block mixes positions, and which part transforms positions independently?
 3. What would change in the equations if post-norm were chosen instead of pre-norm?
 
-<small>Source: Breeden §§6–7. Primary references: Vaswani et al. (2017), §3.2; Ba et al., [*Layer Normalization*](https://arxiv.org/abs/1607.06450); Zhang and Sennrich, [*Root Mean Square Layer Normalization*](https://arxiv.org/abs/1910.07467).</small>
+<small>Source: Breeden Sections 6–7. Primary references: Vaswani et al. (2017), Section 3.2; Ba et al., [*Layer Normalization*](https://arxiv.org/abs/1607.06450); Zhang and Sennrich, [*Root Mean Square Layer Normalization*](https://arxiv.org/abs/1910.07467).</small>

@@ -16,12 +16,12 @@ The equations explain the computation. They do not, by themselves, prove that a 
 
 | Question | Page | Source / added material |
 |---|---|---|
-| What is predicted, and how do IDs become vectors? | [Foundations](notes/01-foundations.md) | Breeden §§1–3; embedding clarification |
-| How does one position use context? | [Attention](notes/02-context-attention.md) | Breeden §§4–5; Vaswani et al. |
-| Why heads, depth, residuals, and norms? | [Depth](notes/03-relations-depth.md) | Breeden §§6–7; architecture variants |
-| How does order enter and how are scores decoded? | [Position and output](notes/04-position-output.md) | Breeden §§8–9; RoPE reference |
-| How are parameters fitted and used? | [Training](notes/05-training.md) | Breeden §10; cache clarification |
-| What claims are safe? | [Interpretation](notes/06-interpretation.md) | Breeden §§11–13; claim labels |
+| What is predicted, and how do IDs become vectors? | [Foundations](notes/01-foundations.md) | Breeden Sections 1–3; embedding clarification |
+| How does one position use context? | [Attention](notes/02-context-attention.md) | Breeden Sections 4–5; Vaswani et al. |
+| Why heads, depth, residuals, and norms? | [Depth](notes/03-relations-depth.md) | Breeden Sections 6–7; architecture variants |
+| How does order enter and how are scores decoded? | [Position and output](notes/04-position-output.md) | Breeden Sections 8–9; RoPE reference |
+| How are parameters fitted and used? | [Training](notes/05-training.md) | Breeden Section 10; cache clarification |
+| What claims are safe? | [Interpretation](notes/06-interpretation.md) | Breeden Sections 11–13; claim labels |
 | Can I check the algebra? | [Worked example](worked-example.md) | New, reproducible calculation |
 
 ## Notation contract

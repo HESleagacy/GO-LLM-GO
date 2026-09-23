@@ -2,7 +2,7 @@
 
 **Question:** How are the fitted parameters chosen, and why is serving a prompt different from training on it?
 
-Breeden §10 introduces likelihood and gradient updates. The prefill/decode distinction and cache explanation below are implementation clarifications.
+Breeden Section 10 introduces likelihood and gradient updates. The prefill/decode distinction and cache explanation below are implementation clarifications.
 
 ## Maximum likelihood and cross-entropy
 
@@ -74,4 +74,4 @@ The repository has no training loop, gradients, optimizer, inference loop, or ca
 2. Which tensors are cached, and which new tensor is still needed for the current query?
 3. Does lowering cross-entropy prove the generated text is factually correct? Why not?
 
-<small>Source: Breeden §10. Primary references: Vaswani et al. (2017), §5.3; Kwon et al., [*Efficient Memory Management for Large Language Model Serving with PagedAttention*](https://arxiv.org/abs/2309.06180) for serving/cache context.</small>
+<small>Source: Breeden Section 10. Primary references: Vaswani et al. (2017), Section 5.3; Kwon et al., [*Efficient Memory Management for Large Language Model Serving with PagedAttention*](https://arxiv.org/abs/2309.06180) for serving/cache context.</small>

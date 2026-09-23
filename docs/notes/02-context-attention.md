@@ -2,7 +2,7 @@
 
 **Question:** Given a state at position \(i\), which earlier states should contribute, and what information should each contribute?
 
-Breeden §§4–5 introduce learned weighted averaging. The standard scaled dot-product form and explicit mask below follow Vaswani et al. (2017).
+Breeden Sections 4–5 introduce learned weighted averaging. The standard scaled dot-product form and explicit mask below follow Vaswani et al. (2017).
 
 ![Causal self-attention computation](../assets/images/causal-attention.svg){ .diagram }
 
@@ -94,4 +94,4 @@ The weights are useful computational diagnostics, but they are not by themselves
 2. What are the shapes of \(QK^\top\) and \(AV_{\rm val}\)?
 3. If all allowed scores are equal, what are the weights at position \(i\)?
 
-<small>Source: Breeden §§4–5. Primary reference: Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762), §3.2.1.</small>
+<small>Source: Breeden Sections 4–5. Primary reference: Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762), Section 3.2.1.</small>

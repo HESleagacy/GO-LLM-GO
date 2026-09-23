@@ -2,7 +2,7 @@
 
 **Question:** Which statements follow from the equations, which report observations, and which are the author's interpretation?
 
-This page follows Breeden §§11–13. The labels are deliberate because a mechanism description and a capability claim are different kinds of evidence.
+This page follows Breeden Sections 11–13. The labels are deliberate because a mechanism description and a capability claim are different kinds of evidence.
 
 ## Three claim categories
 
@@ -70,4 +70,4 @@ The source is valuable as an accessible derivation, but several broad statements
 2. What evidence would be required before saying a particular head detects subjects?
 3. Why can a model assign high probability to a false sentence?
 
-<small>Source: Breeden §§11–13. Added caution follows standard distinctions in Transformer interpretability and empirical evaluation; no capability or benchmark claim is made here.</small>
+<small>Source: Breeden Sections 11–13. Added caution follows standard distinctions in Transformer interpretability and empirical evaluation; no capability or benchmark claim is made here.</small>

@@ -2,7 +2,7 @@
 
 **Question:** How can the same token vectors represent different orderings, and how does a final hidden state become a next-token choice?
 
-This follows Breeden §§8–9 and adds the implementation distinction between absolute sinusoidal positions and RoPE.
+This follows Breeden Sections 8–9 and adds the implementation distinction between absolute sinusoidal positions and RoPE.
 
 ## Why position is necessary
 
@@ -85,4 +85,4 @@ The [worked example](../worked-example.md) computes \(\ell=(1,1,2)\), probabilit
 2. Is temperature part of the forward-pass probability model or a decoding control?
 3. What must be changed if a checkpoint trained with RoPE is loaded into a sinusoidal-position implementation?
 
-<small>Source: Breeden §§8–9. Primary references: Su et al., [*RoFormer*](https://arxiv.org/abs/2104.09864); Press et al., [*Train Short, Test Long*](https://arxiv.org/abs/2108.12409).</small>
+<small>Source: Breeden Sections 8–9. Primary references: Su et al., [*RoFormer*](https://arxiv.org/abs/2104.09864); Press et al., [*Train Short, Test Long*](https://arxiv.org/abs/2108.12409).</small>

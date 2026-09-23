@@ -2,7 +2,7 @@
 
 **Question:** What object is a language model predicting, and how can a numerical function accept text symbols?
 
-This page follows Breeden §§1–3. The probability factorization is exact; the choice of tokenizer and representation is a modeling design.
+This page follows Breeden Sections 1–3. The probability factorization is exact; the choice of tokenizer and representation is a modeling design.
 
 ## Tokens are discrete inputs
 
@@ -40,7 +40,7 @@ the lookup is \(x_i=(1,1,0)\), a vector in \(\mathbb R^3\). It is not multiplica
 
 ### Embeddings are not PCA
 
-**Technical clarification:** Breeden uses PCA as a compression analogy (source §3.2). Standard embeddings are not generally computed by running PCA over token counts or hidden states. They are learned parameters updated through the prediction objective. Their coordinates need not be orthogonal, ordered by variance, or individually interpretable. Similar usage can produce nearby vectors, but similarity is a learned consequence, not a constraint.
+**Technical clarification:** Breeden uses PCA as a compression analogy (source Section 3.2). Standard embeddings are not generally computed by running PCA over token counts or hidden states. They are learned parameters updated through the prediction objective. Their coordinates need not be orthogonal, ordered by variance, or individually interpretable. Similar usage can produce nearby vectors, but similarity is a learned consequence, not a constraint.
 
 ### Lookup versus contextual state
 
@@ -68,4 +68,4 @@ The two occurrences of “bank” receive the same initial row but can acquire d
 2. Which operation first lets the state for “bank” depend on “river”?
 3. Why does the chain rule remain true even if the model's probabilities are poorly fitted?
 
-<small>Source: Breeden §§1–3. Added technical reference: Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762), §3.4.</small>
+<small>Source: Breeden Sections 1–3. Added technical reference: Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762), Section 3.4.</small>
