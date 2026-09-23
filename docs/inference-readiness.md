@@ -137,6 +137,8 @@ Learn negative log-likelihood, perplexity, exact match, pass@k where appropriate
 
 Use the [language-effect benchmark section](notes/06-interpretation.md#how-to-benchmark-the-effect-of-language) only after the model, tokenizer, prompt format, and evaluation harness are fixed. Compare equivalent examples across languages and separately report quality, calibration, token count, latency, and context overflow.
 
+For a concrete, comment-free PyTorch implementation path, follow the [PyTorch side-by-side lab](pytorch-lab.md). It mirrors the Go equations without adding that implementation to this repository.
+
 ### 8. Implement generation and serving
 
 First implement deterministic greedy generation with maximum length, context-limit checks, EOS handling, and empty-prompt behavior. Then add temperature, top-k, and nucleus sampling as separate decoding functions. Test that changing decoding settings does not mutate model parameters or the underlying logits.

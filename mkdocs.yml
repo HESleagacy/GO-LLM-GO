@@ -28,6 +28,7 @@ nav:
       - Equation reference: notes/07-equations.md
       - End-to-end worked example: worked-example.md
   - Go Lab: go-lab.md
+  - PyTorch side-by-side lab: pytorch-lab.md
   - Inference readiness: inference-readiness.md
   - Source and scope: source-notes.md
 markdown_extensions:
