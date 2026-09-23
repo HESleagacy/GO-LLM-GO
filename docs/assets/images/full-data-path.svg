@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 250" role="img" aria-labelledby="title desc">
+  <title id="title">Decoder-only language model data path</title>
+  <desc id="desc">Token IDs are embedded and combined with positions, passed through repeated causal decoder blocks, projected to vocabulary logits, normalized into probabilities, and sent to a decoding rule.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#087f8c"/></marker></defs>
+  <rect width="1200" height="250" fill="#f8fafc"/>
+  <g font-family="Arial, sans-serif" fill="#17243a" text-anchor="middle">
+    <g stroke="#087f8c" stroke-width="3" marker-end="url(#arrow)">
+      <path d="M170 120 H225"/><path d="M380 120 H435"/><path d="M590 120 H645"/><path d="M800 120 H855"/><path d="M1010 120 H1065"/>
+    </g>
+    <g stroke="#17243a" stroke-width="1.5">
+      <rect x="25" y="75" width="145" height="90" rx="10" fill="#dff3f5"/><rect x="225" y="65" width="155" height="110" rx="10" fill="#e8eef9"/><rect x="435" y="50" width="155" height="140" rx="10" fill="#fff0df"/><rect x="645" y="75" width="155" height="90" rx="10" fill="#e8eef9"/><rect x="855" y="75" width="155" height="90" rx="10" fill="#dff3f5"/><rect x="1065" y="75" width="110" height="90" rx="10" fill="#fff0df"/>
+    </g>
+    <g font-size="17" font-weight="700"><text x="97" y="110">Token IDs</text><text x="302" y="100">Embeddings</text><text x="302" y="130">+ positions</text><text x="512" y="90">Repeated decoder</text><text x="512" y="120">blocks</text><text x="512" y="150">(causal)</text><text x="722" y="112">Final states</text><text x="722" y="142">at each position</text><text x="932" y="112">Vocabulary</text><text x="932" y="142">logits</text><text x="1120" y="112">Softmax</text><text x="1120" y="142">+ decode</text></g>
+    <g font-size="13"><text x="97" y="148">0, 12, 7, ...</text><text x="512" y="175">attention + FFN</text><text x="1120" y="188">sample or argmax</text></g>
+  </g>
+</svg>

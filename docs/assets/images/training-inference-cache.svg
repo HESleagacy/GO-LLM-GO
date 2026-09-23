@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1150 470" role="img" aria-labelledby="title desc">
+  <title id="title">Training, inference, and KV cache reuse</title>
+  <desc id="desc">Training processes known target positions in parallel with a causal mask. Inference prefills a prompt, then repeatedly processes one new token; a key-value cache reuses prior keys and values but does not change the probability distribution.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#087f8c"/></marker></defs>
+  <rect width="1150" height="470" fill="#f8fafc"/>
+  <g font-family="Arial, sans-serif" fill="#17243a" stroke="#17243a" stroke-width="1.5">
+    <rect x="25" y="35" width="520" height="180" rx="12" fill="#e8eef9"/><rect x="605" y="35" width="520" height="390" rx="12" fill="#fff0df"/>
+    <text x="285" y="70" text-anchor="middle" font-size="22" font-weight="700" stroke="none">Training: parallel teacher forcing</text><text x="865" y="70" text-anchor="middle" font-size="22" font-weight="700" stroke="none">Inference: autoregressive loop</text>
+    <g stroke="#087f8c" stroke-width="3" marker-end="url(#arrow)" fill="none"><path d="M65 125 H175"/><path d="M270 125 H385"/><path d="M455 125 H510"/></g>
+    <g stroke="#17243a" fill="#dff3f5"><rect x="65" y="100" width="110" height="50" rx="8"/><rect x="270" y="100" width="115" height="50" rx="8"/><rect x="455" y="100" width="65" height="50" rx="8"/></g>
+    <g text-anchor="middle" font-size="15" stroke="none"><text x="120" y="130">full sequence</text><text x="327" y="130">masked model</text><text x="487" y="130">loss</text><text x="285" y="185">Known targets let every non-future position be scored at once.</text></g>
+    <g stroke="#087f8c" stroke-width="3" marker-end="url(#arrow)" fill="none"><path d="M650 120 H775"/><path d="M850 120 H985"/><path d="M1015 155 V250"/><path d="M985 285 H850"/><path d="M775 285 H650"/><path d="M850 350 H1015 V400 H850"/></g>
+    <g stroke="#17243a"><rect x="650" y="95" width="125" height="50" rx="8" fill="#dff3f5"/><rect x="850" y="95" width="135" height="50" rx="8" fill="#dff3f5"/><rect x="985" y="250" width="60" height="70" rx="8" fill="#ffe3d2"/><rect x="650" y="260" width="125" height="50" rx="8" fill="#dff3f5"/><rect x="850" y="260" width="135" height="50" rx="8" fill="#dff3f5"/><rect x="850" y="350" width="135" height="50" rx="8" fill="#dff3f5"/></g>
+    <g text-anchor="middle" font-size="15" stroke="none"><text x="712" y="125">prompt tokens</text><text x="917" y="125">prefill model</text><text x="1015" y="279">logits</text><text x="1015" y="300">+ decode</text><text x="712" y="290">append token</text><text x="917" y="290">one new step</text><text x="917" y="380">KV cache</text><text x="917" y="420">reuse old K,V; compute new Q,K,V</text></g>
+    <path d="M985 375 C800 445 690 410 690 315" fill="none" stroke="#bd5b16" stroke-width="3" stroke-dasharray="8 6" marker-end="url(#arrow)"/>
+    <text x="565" y="455" text-anchor="middle" font-size="14" stroke="none">Cache saves recomputation and memory traffic. It does not alter the model's target distribution when implemented correctly.</text>
+  </g>
+</svg>

@@ -1,0 +1,53 @@
+:root {
+  --guide-ink: #17243a;
+  --guide-teal: #087f8c;
+  --guide-orange: #bd5b16;
+  --guide-panel: #f4f7fa;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  color: var(--guide-ink);
+}
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-left-width: 0.25rem;
+}
+
+.math-block {
+  overflow-x: auto;
+}
+
+.diagram {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 1rem auto 0.35rem;
+  background: white;
+  border: 1px solid #d8e0e8;
+  border-radius: 0.35rem;
+}
+
+.diagram-caption {
+  color: var(--md-default-fg-color--light);
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+  text-align: center;
+}
+
+.shape-table td:first-child,
+.shape-table th:first-child {
+  white-space: nowrap;
+}
+
+.source-label {
+  color: var(--guide-teal);
+  font-weight: 700;
+}
+
+.limit-label {
+  color: var(--guide-orange);
+  font-weight: 700;
+}

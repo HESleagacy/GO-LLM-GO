@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 340" role="img" aria-labelledby="title desc">
+  <title id="title">One causal self-attention block</title>
+  <desc id="desc">Each state is projected to query, key, and value rows. Query-key dot products are scaled and masked, softmax produces weights, and the weights aggregate value rows.</desc>
+  <defs><marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#087f8c"/></marker></defs>
+  <rect width="1100" height="340" fill="#f8fafc"/>
+  <g font-family="Arial, sans-serif" fill="#17243a" text-anchor="middle" stroke="#17243a" stroke-width="1.5">
+    <rect x="25" y="125" width="120" height="75" rx="9" fill="#e8eef9"/><text x="85" y="157" stroke="none" font-size="18" font-weight="700">states X</text><text x="85" y="181" stroke="none" font-size="13">[n, d]</text>
+    <rect x="200" y="40" width="120" height="65" rx="9" fill="#dff3f5"/><rect x="200" y="135" width="120" height="65" rx="9" fill="#dff3f5"/><rect x="200" y="230" width="120" height="65" rx="9" fill="#dff3f5"/>
+    <text x="260" y="78" stroke="none" font-size="18" font-weight="700">Q = XWQ</text><text x="260" y="173" stroke="none" font-size="18" font-weight="700">K = XWK</text><text x="260" y="268" stroke="none" font-size="18" font-weight="700">V = XWV</text>
+    <rect x="390" y="125" width="155" height="75" rx="9" fill="#fff0df"/><text x="467" y="157" stroke="none" font-size="17" font-weight="700">QK^T / sqrt(dk)</text><text x="467" y="181" stroke="none" font-size="13">scores [n, n]</text>
+    <rect x="610" y="125" width="125" height="75" rx="9" fill="#ffe3d2"/><text x="672" y="157" stroke="none" font-size="17" font-weight="700">causal mask</text><text x="672" y="181" stroke="none" font-size="13">future = -infinity</text>
+    <rect x="800" y="125" width="110" height="75" rx="9" fill="#dff3f5"/><text x="855" y="157" stroke="none" font-size="18" font-weight="700">softmax</text><text x="855" y="181" stroke="none" font-size="13">weights A</text>
+    <rect x="975" y="125" width="100" height="75" rx="9" fill="#e8eef9"/><text x="1025" y="157" stroke="none" font-size="17" font-weight="700">AV</text><text x="1025" y="181" stroke="none" font-size="13">weighted sum</text>
+    <g stroke="#087f8c" stroke-width="3" marker-end="url(#arrow)" fill="none"><path d="M145 155 C165 155 170 73 200 73"/><path d="M145 163 H200"/><path d="M145 175 C165 175 170 263 200 263"/><path d="M320 73 C350 73 350 145 390 145"/><path d="M320 168 H390"/><path d="M545 163 H610"/><path d="M735 163 H800"/><path d="M910 163 H975"/><path d="M320 263 C650 300 800 260 975 185"/></g>
+    <text x="550" y="315" stroke="none" font-size="14">For position i, only columns j &lt;= i survive the mask.</text>
+  </g>
+</svg>

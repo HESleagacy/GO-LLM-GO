@@ -15,6 +15,9 @@ theme:
 nav:
   - Home: index.md
   - Master Notes: master-notes.md
+  - Quick reference:
+      - Notation and dimensions: notation.md
+      - Glossary: glossary.md
   - Concepts:
       - Text, probability, and embeddings: notes/01-foundations.md
       - Context and weighted averaging: notes/02-context-attention.md
@@ -23,6 +26,7 @@ nav:
       - Training the parameters: notes/05-training.md
       - What models learn and where claims need care: notes/06-interpretation.md
       - Equation reference: notes/07-equations.md
+      - End-to-end worked example: worked-example.md
   - Go Lab: go-lab.md
   - Inference readiness: inference-readiness.md
   - Source and scope: source-notes.md
@@ -37,5 +41,8 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.arithmatex:
       generic: true
+extra_css:
+  - stylesheets/extra.css
 extra_javascript:
-  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
+  - assets/javascripts/mathjax-config.js
+  - assets/javascripts/mathjax/tex-mml-chtml.js

@@ -1,6 +1,6 @@
 # Mathematics of LLMs — Go Notes
 
-An educational documentation site and a dependency-free Go reference implementation based on Joseph L. Breeden's *The Simple Mathematics of Large Language Models* (uploaded PDF, 20 pages).
+An educational documentation site and a dependency-free Go forward-pass demonstration based on Joseph L. Breeden's *The Simple Mathematics of Large Language Models* (20-page source PDF referenced by section).
 
 ## What is included
 
@@ -8,7 +8,8 @@ An educational documentation site and a dependency-free Go reference implementat
 - Equations translated into readable notation, with dimensions stated explicitly.
 - Notes that distinguish what the paper says from corrections or implementation nuance.
 - A small causal self-attention forward pass in Go, built from primitive matrix/vector operations.
-- Tests for softmax normalization, causal masking, and tensor shape checks.
+- Tests for stable softmax, token-level causal masking, and tensor shape checks.
+- A hand-checkable end-to-end example, local SVG diagrams, notation reference, and glossary.
 - An inference-readiness roadmap for turning the demo into a trained small language model.
 
 ## Run the Go lab
@@ -23,7 +24,7 @@ The Go code is an inspectable teaching model. It does **not** train a language m
 
 ## Preview the docs
 
-The package includes a prebuilt `site/` directory. Serve it locally with:
+The package includes a prebuilt `site/` directory with local MathJax assets, so the equations do not depend on a third-party CDN. Serve it locally with:
 
 ```sh
 cd site
@@ -37,7 +38,7 @@ python -m pip install -r requirements-docs.txt
 mkdocs serve
 ```
 
-Open the local address printed by MkDocs. To build static HTML, run `mkdocs build`; output goes to `site/`.
+Open the local address printed by MkDocs. To build static HTML, run `mkdocs build --strict`; output goes to `site/`.
 
 ## Source
 
