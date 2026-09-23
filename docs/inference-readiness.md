@@ -119,6 +119,50 @@ Study state dictionaries, serialization formats, configuration files, checksums,
 
 Keep fixed input IDs and expected logits as a checkpoint parity test. Loading a checkpoint is correct only when the inference implementation reproduces the training implementation within an explicit tolerance.
 
+### 6. Understand GPU training and memory
+
+Learn device placement, CUDA tensors, mixed precision, gradient scaling, gradient accumulation, activation memory, and attention's sequence-length cost. Measure instead of guessing:
+
+- parameter memory and activation memory;
+- tokens per second during training;
+- peak memory and batch-size limit;
+- validation loss versus wall-clock time;
+- numerical differences between `float32`, `bfloat16`, and any other format used.
+
+Begin on CPU with a tiny model, then move the same fixed test case to GPU. Do not describe a model as efficient without recording hardware and configuration.
+
+### 7. Evaluate model behavior
+
+Learn negative log-likelihood, perplexity, exact match, pass@k where appropriate, calibration, and task-specific human evaluation. Keep a held-out set and a deterministic evaluation script. Report confidence intervals, seeds, invalid outputs, and per-category failures.
+
+Use the [language-effect benchmark section](notes/06-interpretation.md#how-to-benchmark-the-effect-of-language) only after the model, tokenizer, prompt format, and evaluation harness are fixed. Compare equivalent examples across languages and separately report quality, calibration, token count, latency, and context overflow.
+
+### 8. Implement generation and serving
+
+First implement deterministic greedy generation with maximum length, context-limit checks, EOS handling, and empty-prompt behavior. Then add temperature, top-k, and nucleus sampling as separate decoding functions. Test that changing decoding settings does not mutate model parameters or the underlying logits.
+
+After uncached generation is correct, implement a KV cache. Compare cached and uncached logits at every generated position, not just the final text. Then study batching, continuous batching, quantization, request limits, timeouts, and memory isolation before calling the system a service.
+
+### 9. Learn fine-tuning responsibly
+
+Distinguish continued pretraining, supervised fine-tuning, parameter-efficient methods such as LoRA, preference optimization, and retrieval augmentation. Start with a small licensed instruction dataset and a held-out evaluation set. Track the base checkpoint, data mixture, prompt template, optimizer settings, trainable parameter count, and before/after regressions.
+
+Check for memorization, leakage, unsafe behavior, loss of general capability, and overfitting. A lower training loss or a few attractive samples is not enough to claim that fine-tuning improved the model.
+
+### Suggested sequence of projects
+
+1. Implement and test a tokenizer.
+2. Reproduce the worked example in PyTorch.
+3. Train a tiny model on a synthetic repeating pattern.
+4. Train the same model on a small licensed text corpus.
+5. Add checkpoint parity and greedy generation.
+6. Add sampling controls and evaluation reports.
+7. Add KV caching and verify cached logits.
+8. Run the multilingual benchmark with documented controls.
+9. Try a small fine-tuning experiment and report regressions as well as gains.
+
+At every stage, preserve a small known-answer test. The Go demo remains the reference for transparent scalar operations; PyTorch becomes useful when you need automatic differentiation, batching, and hardware acceleration.
+
 ## Honest status of this repository
 
 The repository currently reaches only the **forward-pass demonstration** stage. It does not yet have a tokenizer, training, checkpoint loading, generation loop, or KV cache. Once those pieces exist and a checkpoint is trained, calling it a small language model is reasonable. Until then, “inference-ready” describes this roadmap, not the current code.
