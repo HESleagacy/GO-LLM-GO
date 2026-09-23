@@ -1,0 +1,41 @@
+site_name: Mathematics of LLMs — Go Notes
+site_description: A source-grounded guide to the mathematics of language models, with a small Go implementation.
+site_author: Ananya Gupta
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.indexes
+    - navigation.top
+    - content.code.copy
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: cyan
+nav:
+  - Home: index.md
+  - Master Notes: master-notes.md
+  - Concepts:
+      - Text, probability, and embeddings: notes/01-foundations.md
+      - Context and weighted averaging: notes/02-context-attention.md
+      - Multiple relations and depth: notes/03-relations-depth.md
+      - Position and next-token probabilities: notes/04-position-output.md
+      - Training the parameters: notes/05-training.md
+      - What models learn and where claims need care: notes/06-interpretation.md
+      - Equation reference: notes/07-equations.md
+  - Go Lab: go-lab.md
+  - Inference readiness: inference-readiness.md
+  - Source and scope: source-notes.md
+markdown_extensions:
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.arithmatex:
+      generic: true
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
