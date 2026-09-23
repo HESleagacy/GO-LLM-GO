@@ -1,62 +1,72 @@
-# 3. Multiple relations and depth
+# 3. Heads, depth, and decoder blocks
 
-This page follows source sections 6–7: run several attention computations in parallel, combine them, and stack layers with feed-forward transformations.
+**Question:** Why repeat attention in parallel and in depth instead of using one weighted average?
 
-## 3.1 Parallel attention heads
+Breeden §§6–7 use “relations” and layers to explain this. The implementation details below distinguish what the equations permit from what training actually produces.
 
-One projection set can learn one compatibility pattern. A Transformer layer uses \(H\) separate sets of projections. For head \(h\):
+## Multiple heads
 
-\[
-z_i^{(h)}=\sum_{j\in A_i}\alpha_{ij}^{(h)}W_V^{(h)}x_j,
-\qquad
-y_i=W_O[z_i^{(1)};\ldots;z_i^{(H)}].
-\]
-
-The semicolon denotes concatenation. The output projection maps the concatenated vector back to the model width. Each head has its own learned projections, so different patterns can be represented in parallel.
-
-The source calls a head a “relation” to emphasize the computation rather than an assigned semantic role. That is a useful translation for intuition. The standard engineering term remains **attention head**.
-
-!!! note "Do not assume clean specialization"
-    Multiple heads create capacity for different patterns; training does not guarantee that each head learns a distinct linguistic relation. Heads may specialize, overlap, or be partly redundant. “One head = one grammatical job” is a story, not a property enforced by the equations.
-
-## 3.2 Stacking layers expands the receptive computation
-
-Let \(x_i^{(0)}\) be the input embedding plus position information. A layer takes the whole sequence of states and returns new states:
+Head \(h\) has its own projections and produces
 
 \[
-x_i^{(\ell)}=\operatorname{Layer}_{\ell}(x_1^{(\ell-1)},\ldots,x_n^{(\ell-1)})_i.
+Z^{(h)}=\operatorname{Attention}(XW_Q^{(h)},XW_K^{(h)},XW_V^{(h)})
+\in\mathbb R^{n\times d_v}.
 \]
 
-With causal attention, after one layer position \(i\) can use positions up to \(i\). After multiple layers it can combine features that earlier positions themselves gathered from their prefixes. The effective computation becomes richer without requiring a single operation to encode every relationship.
+Concatenate along the feature dimension and project back to model width:
 
-## 3.3 The feed-forward transformation
+\[
+Y=\operatorname{Concat}(Z^{(1)},\ldots,Z^{(H)})W_O,
+\]
 
-After attention, a position-wise nonlinear network transforms each vector independently:
+where the concatenated matrix is \(n\times Hd_v\), \(W_O\in\mathbb R^{Hd_v\times d}\) under row-vector notation, and \(Y\in\mathbb R^{n\times d}\). With column-vector notation, transpose the displayed matrix orientation; the per-position dimensions are unchanged.
+
+**Intuition:** parallel projections give the layer several compatibility/content subspaces at the same time. One head could focus on a nearby token while another uses a longer dependency. **Limit:** the architecture permits different patterns; it does not guarantee that head 1 is “syntax” and head 2 is “coreference.” Heads can overlap or be redundant.
+
+The current Go code has one head and therefore no concatenation step. `WQ`, `WK`, and `WV` are square `[width, width]` matrices; `WO` maps the one head back to the same width.
+
+## Feed-forward transformation
+
+Attention mixes information across positions. A position-wise feed-forward network then transforms each position independently using shared weights:
 
 \[
 \operatorname{FFN}(x)=W_2\,\phi(W_1x+b_1)+b_2.
 \]
 
-The same FFN weights are applied at each position within a layer. The nonlinearity \(\phi\) matters: without a nonlinearity, a composition of linear maps remains linear and cannot create the same expressive features.
+For \(x\in\mathbb R^d\), hidden width \(d_{ff}\), \(W_1\in\mathbb R^{d_{ff}\times d}\), \(W_2\in\mathbb R^{d\times d_{ff}}\), the result returns to \(\mathbb R^d\). The nonlinearity \(\phi\) is essential: two linear maps without it collapse to one linear map. The source illustrates ReLU, \(\operatorname{ReLU}(a)=\max(0,a)\); modern models also use GELU or gated variants.
 
-The paper illustrates ReLU, \(\max(0,x)\). Modern architectures also use alternatives such as GELU or gated activations. The exact choice is an implementation/model-design choice.
+Example: \(W_1x+b_1=(-2,0.5,3)\) becomes \((0,0.5,3)\) under ReLU. Negative hidden coordinates are clipped, so later linear mixing can implement a piecewise-linear transformation.
 
-## 3.4 Residual paths and normalization
+## Residuals and normalization
 
-A residual connection adds a transformation to its input, schematically:
+![Chosen pre-norm decoder block](../assets/images/decoder-block.svg){ .diagram }
+
+<p class="diagram-caption">Figure 4. Chosen variant: pre-norm. The orange dashed route is an identity residual; post-norm and other layouts are also used.</p>
+
+The diagram chooses the common pre-norm schematic
 
 \[
-x' = x + f(x).
+x_1=x+\operatorname{Attention}(\operatorname{Norm}(x)),
+\qquad
+x_2=x_1+\operatorname{FFN}(\operatorname{Norm}(x_1)).
 \]
 
-The identity path makes it easier for information and gradients to pass through deep stacks. This is a helpful route for gradient flow, not a guarantee that gradients can never vanish or that optimization is automatically stable.
+A residual connection computes \(x+f(x)\), retaining an identity route around each sublayer. That route supplies a direct derivative contribution and often makes deep optimization easier; it does not guarantee non-vanishing gradients.
 
-Normalization keeps activation scales manageable. LayerNorm and RMSNorm are common variants; architectures differ in whether normalization is before or after a sublayer. The source's “mean 0 and variance 1 after each sub-operation” describes one simplified picture, not a universal Transformer recipe.
+Normalization controls feature scale. LayerNorm for a vector \(x\in\mathbb R^d\) typically normalizes using its feature mean and variance, then applies learned scale and shift. RMSNorm uses a root-mean-square scale and does not subtract the mean. Architectures also differ in placement: **pre-norm** normalizes before a sublayer, while **post-norm** normalizes after the residual addition. The source's statement that every sub-operation leaves mean 0 and variance 1 is a useful simplification, not a universal Transformer layout.
 
-## 3.5 Parameter sharing boundaries
+## Stacking layers
 
-The attention heads and layers have learned parameters. Typically, the token embedding table may also be tied to the output projection, but tying is optional and the paper lists separate input and output vectors. Do not infer a specific implementation choice from the high-level diagram alone.
+Let \(X^{(0)}\) be embeddings plus positions and \(X^{(\ell)}=\operatorname{Block}_\ell(X^{(\ell-1)})\). Every causal block preserves the rule that position \(i\) cannot directly read \(j>i\). Later layers can nevertheless use features that earlier positions already aggregated from their own prefixes. Depth composes local operations into richer conditional features; it does not make the context window infinite.
 
-## Go connection
+## Go boundary
 
-The included program focuses on one head so the dot products and weighted sum stay inspectable. The same function can be repeated with separate projection matrices and concatenated outputs to build multiple heads. A fully configurable multi-layer trainer would add substantial machinery that the paper explains conceptually but the toy forward pass does not implement.
+`Model.Forward` performs one attention pass, then for every position applies `WO`, a residual, `W1`, `relu`, `W2`, and another residual. It intentionally omits normalization, biases, multiple heads, and multiple configurable layers. Read it as a concrete one-block variant, not as a claim that all decoder blocks have this exact layout.
+
+## Self-check
+
+1. If \(H=4\) and each head has \(d_v=16\), what is the concatenated width before \(W_O\)?
+2. Which part of a block mixes positions, and which part transforms positions independently?
+3. What would change in the equations if post-norm were chosen instead of pre-norm?
+
+<small>Source: Breeden §§6–7. Primary references: Vaswani et al. (2017), §3.2; Ba et al., [*Layer Normalization*](https://arxiv.org/abs/1607.06450); Zhang and Sennrich, [*Root Mean Square Layer Normalization*](https://arxiv.org/abs/1910.07467).</small>

@@ -1,43 +1,77 @@
-# 5. Training the parameters
+# 5. Training, inference, and the KV cache
 
-This page follows source section 10. The architecture defines a differentiable function; training adjusts its parameters to predict observed tokens.
+**Question:** How are the fitted parameters chosen, and why is serving a prompt different from training on it?
 
-## 5.1 Maximum likelihood and negative log-likelihood
+Breeden §10 introduces likelihood and gradient updates. The prefill/decode distinction and cache explanation below are implementation clarifications.
 
-For a tokenized training sequence \((w_1,\ldots,w_n)\), the autoregressive log-likelihood is:
+## Maximum likelihood and cross-entropy
 
-\[
-\log P_\theta(w_{1:n})=\sum_{t=1}^{n}\log P_\theta(w_t\mid w_{1:t-1}).
-\]
-
-Across a corpus, maximum likelihood chooses parameters \(\theta\) that maximize this sum. Equivalently, training minimizes its negative, often averaged over tokens:
+For a tokenized sequence, the chain rule gives
 
 \[
-\mathcal L(\theta)=-\frac{1}{N}\sum_{t=1}^{N}\log P_\theta(w_t\mid w_{<t}).
+\log P_\theta(w_{1:n})=\sum_{t=1}^{n}\log P_\theta(w_t\mid w_{<t}).
 \]
 
-For one observed target token, this is categorical cross-entropy against a one-hot target. It penalizes the model when it assigns low probability to the actual next token.
-
-## 5.2 Gradient updates
-
-Gradient descent updates parameters in the direction that reduces loss:
+Maximum likelihood chooses parameters that make observed continuations probable. Minimizing negative log-likelihood, often averaged over \(N\) target tokens, is equivalent:
 
 \[
-\theta\leftarrow\theta-\eta\nabla_\theta\mathcal L(\theta),
+\mathcal L(\theta)=-\frac1N\sum_{t=1}^{N}\log P_\theta(w_t\mid w_{<t}).
 \]
 
-where \(\eta\) is the learning rate. Backpropagation applies the chain rule to compute gradients through the composed operations. In practice, modern training commonly uses minibatches and adaptive optimizers such as Adam variants; the paper's gradient-descent equation gives the basic idea.
+For one target with one-hot label \(y\), categorical cross-entropy is
 
-## 5.3 What “stochastic” buys and what it does not promise
+\[
+\operatorname{CE}(y,p)=-\sum_{v\in V}y_v\log p_v=-\log p_{\text{target}}.
+\]
 
-Sampling minibatches avoids computing each update over the entire corpus. Under suitable sampling assumptions, the minibatch gradient can be an unbiased estimate of the full-data gradient. But unbiased does not mean low variance, and stochastic optimization of a large non-convex network does not come with a blanket guarantee of convergence to a globally optimal solution. Learning-rate schedules, data quality, architecture, and numerical stability matter.
+If the target probability is \(0.8\), the loss is \(-\log(0.8)\approx0.2231\); if it is \(0.1\), the loss is \(2.3026\). The loss is a measure of assigned probability, not a direct measure of truth or quality. The [worked example](../worked-example.md) computes one from scratch.
 
-## 5.4 Training versus inference
+## The chain rule in backpropagation
 
-During training, the model predicts many positions in parallel using a causal mask and compares each prediction with its known next token. During generation, it repeatedly predicts a distribution, chooses or samples a token, appends it to context, and runs again. Sampling policy (temperature, top-k, nucleus sampling) changes decoding behavior; it is not part of the core probability model equation.
+The forward pass is a composition \(f_\theta\) of lookups, matrix products, nonlinearities, and softmax. Backpropagation applies the chain rule to compute the gradient of the scalar loss with respect to every parameter:
 
-The source also describes pretraining, supervised fine-tuning, and preference optimization/RLHF. These are common stages in many systems, not required steps in the mathematical definition of every language model.
+\[
+\theta\leftarrow\theta-\eta\nabla_\theta\mathcal L(\theta).
+\]
+
+Here \(\eta\) is a learning rate. Real training uses minibatches, masking for padding, mixed precision, and often Adam-style optimizers. A minibatch gradient can estimate the full-corpus gradient under sampling assumptions, but stochasticity and a non-convex objective do not provide a universal guarantee of reaching a global optimum.
+
+## Training versus inference
+
+![Training, inference, and KV cache](../assets/images/training-inference-cache.svg){ .diagram }
+
+<p class="diagram-caption">Figure 5. Training scores known targets in parallel. Inference first prefills a prompt, then loops over one newly selected token at a time; the cache reuses prior keys and values.</p>
+
+### Training
+
+With a known sequence, the model processes all positions in one tensor. The causal mask ensures position \(i\) cannot use later target tokens. Every eligible position supplies a loss term, so the expensive matrix operations are parallelized across positions.
+
+### Inference
+
+Generation has an actual loop:
+
+1. Tokenize the prompt and enforce the context limit.
+2. Run the prompt through the model (**prefill**) and retain the final logits.
+3. Apply a decoding policy, such as greedy choice or sampling.
+4. Append the selected token and stop on EOS or a length limit.
+5. Process the new position, decode again, and repeat.
+
+Inference cannot use an unknown future token. At each step it asks only for the next conditional distribution.
+
+## What the KV cache saves
+
+At a new decoding step, old keys and values are unchanged if the model and prefix are unchanged. A KV cache stores those projected rows. The new query is compared with cached keys plus the new key, and the resulting weights aggregate cached values plus the new value. This avoids recomputing old projections and old attention rows.
+
+The cache does **not** change the mathematics of the distribution, remove the new query computation, make attention bidirectional, or make a context window unlimited. It trades memory for less repeated computation and is specific to a compatible model configuration. Cached and uncached logits should agree within a documented floating-point tolerance.
 
 ## Go implementation boundary
 
-The Go lab computes a forward pass only. It does not calculate gradients or update weights. That boundary is deliberate: implementing reliable autodiff and training would roughly multiply the code's scope and obscure the core equations. A later extension could add scalar reverse-mode autodiff, then a tiny trainable model; this package does not claim to have done that work.
+The repository has no training loop, gradients, optimizer, inference loop, or cache. `Forward` recomputes every supplied position and returns only the final probability vector. `inference-readiness.md` is a roadmap, not a claim that these features exist.
+
+## Self-check
+
+1. Why can training score many positions in parallel but generation must wait for the selected token?
+2. Which tensors are cached, and which new tensor is still needed for the current query?
+3. Does lowering cross-entropy prove the generated text is factually correct? Why not?
+
+<small>Source: Breeden §10. Primary references: Vaswani et al. (2017), §5.3; Kwon et al., [*Efficient Memory Management for Large Language Model Serving with PagedAttention*](https://arxiv.org/abs/2309.06180) for serving/cache context.</small>

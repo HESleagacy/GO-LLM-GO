@@ -2,7 +2,7 @@
 
 ## Source document
 
-Joseph L. Breeden, *The Simple Mathematics of Large Language Models*, 20-page PDF supplied in this conversation. The PDF cover says January 2026; its title page says “9 December 2025.” The notes cite section numbers because the PDF does not supply a DOI or stable publication URL. Its references are reproduced in the PDF itself.
+Joseph L. Breeden, *The Simple Mathematics of Large Language Models*, 20-page PDF supplied with the original project brief. The existing project audit recorded that the PDF cover says January 2026 and its title page says “9 December 2025.” The PDF is not present in this checkout, so this repository cannot independently verify page-level quotations. The notes therefore cite the source by section and do not present page numbers as if they had been checked.
 
 This guide is a study aid based on that source, not a replacement edition. It paraphrases rather than reproduces the paper wholesale. The explanations, examples, and Go code are newly written for this guide.
 
@@ -26,6 +26,13 @@ The section notes track the author's exposition and preserve his emphasis on ord
 
 The Go code demonstrates a dependency-free CPU forward pass for a tiny one-head causal model. Its parameters are deterministic toy values. It does not train, tokenize raw text, use RoPE, reproduce any paper experiment, or approximate a frontier model's quality. The limitations are stated prominently to prevent an educational demo from being mistaken for a trained LLM.
 
-## Further reading listed by the source
+## Primary references for added material
 
-The source PDF includes references to Vaswani et al. (2017), *Attention Is All You Need*; Su et al. (2024), *RoFormer: Enhanced Transformer with Rotary Position Embedding*; Press et al. (2022), *Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation*; and the other works listed in its final pages. Use the source PDF's bibliography for complete citation details.
+- Vaswani et al. (2017), [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762).
+- Ba, Kiros, and Hinton (2016), [*Layer Normalization*](https://arxiv.org/abs/1607.06450).
+- Zhang and Sennrich (2019), [*Root Mean Square Layer Normalization*](https://arxiv.org/abs/1910.07467).
+- Su et al. (2021), [*RoFormer: Enhanced Transformer with Rotary Position Embedding*](https://arxiv.org/abs/2104.09864).
+- Press, Smith, and Lewis (2022), [*Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation*](https://arxiv.org/abs/2108.12409).
+- Kwon et al. (2023), [*Efficient Memory Management for Large Language Model Serving with PagedAttention*](https://arxiv.org/abs/2309.06180), for serving/cache context.
+
+These references support added technical explanations; they are not claims that Breeden's source makes all of the same arguments.

@@ -1,19 +1,21 @@
-# Go Lab: a tiny causal language-model forward pass
+# Go Lab: inspect a causal forward pass
 
-This lab turns the core equations into ordinary Go slices and loops. The package has no third-party dependencies.
+This lab turns the central equations into ordinary Go slices and loops. It is intentionally small enough to audit without a tensor framework.
 
-## Model path
+## Implemented path
 
-For token IDs \(w_0,\ldots,w_{n-1}\):
+For token IDs \(w_0,\ldots,w_{n-1}\), `Model.Forward` does the following:
 
-1. Look up a learned-looking (but hand-set) embedding row and add a sinusoidal position vector.
-2. Apply query, key, and value matrices.
-3. Compute scaled dot products, mask all future positions, softmax the visible scores, and mix value vectors.
-4. Apply an output projection and a residual addition.
-5. Apply a ReLU feed-forward network and another residual addition.
-6. Project the last position to vocabulary logits and compute stable softmax probabilities.
+1. `m.Embeddings[id]` selects a row of shape `[width]`; `sinusoidalPosition` creates an absolute position vector of the same shape; `add` forms the state.
+2. `MatVec` applies `WQ`, `WK`, and `WV` at every position, producing Q, K, and V rows.
+3. `CausalAttention` computes only scores for `j <= i`, divides by `sqrt(keyWidth)`, calls stable `Softmax`, and sums visible value rows.
+4. `WO` projects the attention result and an `add` applies the attention residual.
+5. `W1`, `relu`, and `W2` implement the position-wise feed-forward path; another `add` applies its residual.
+6. `Output` maps the final position to vocabulary logits; `Softmax` returns the next-token distribution.
 
-The mathematical structure is the same as the conceptual decoder in the notes. The implementation uses one head and omits normalization, biases in most projections, batching, and training so each operation stays inspectable.
+`ForwardStates` exposes the final state for each position without applying the vocabulary classifier. It exists to make the causal invariant observable in a test; it is not a KV cache and does not change `Forward`'s output.
+
+This is one head and one unnormalized block-shaped pass. It has the broad decoder computation, but not the full range of production Transformer variants.
 
 ## Run it
 
@@ -22,50 +24,49 @@ From the project root:
 ```sh
 cd go
 go test ./...
+go vet ./...
 go run ./cmd/demo
 ```
 
-Expected output includes a probability for each toy vocabulary token and a sum close to `1.000000`. The exact probabilities are only a deterministic smoke-test output; they are not a learned language model.
+The demo prints five probabilities whose sum is close to `1.000000`. The numbers are deterministic smoke-test output from fixed toy weights. They are not language predictions, benchmark results, or a trained SLM.
 
-## The core computation
+## Attention invariant
 
-`CausalAttention` receives projected query, key, and value rows. For each position `i`, it computes scores only for `j <= i`, divides dot products by `sqrt(d_k)`, applies stable softmax, then returns the weighted sum of value rows. This directly implements the equation in [Context and weighted averaging](notes/02-context-attention.md).
+`CausalAttention` accepts `q`, `k`, and `v` matrices with shapes `[sequence, keyWidth]`, `[sequence, keyWidth]`, and `[sequence, valueWidth]`. For each row `i`, it materializes a score vector of length `i+1`; future positions are never passed to softmax. `TestCausalAttentionDoesNotReadFutureValues` changes only the value at position 2 and verifies positions 0 and 1 are unchanged while position 2 can change.
 
-The code uses the mathematically equivalent stable softmax form:
+The code uses
 
 \[
-\operatorname{softmax}(s)_j=\frac{\exp(s_j-m)}{\sum_r\exp(s_r-m)},\quad m=\max_r s_r.
+\operatorname{softmax}(s)_j=\frac{\exp(s_j-m)}{\sum_r\exp(s_r-m)},
+\qquad m=\max_r s_r,
 \]
 
-Subtracting the same maximum from every score avoids overflow without changing the result.
+which is algebraically equal to ordinary softmax and avoids overflow. `TestSoftmaxStableAndNormalized` checks finite values and a sum within \(10^{-12}\) of one.
 
-## Tests and what they establish
+## Math-to-code map
 
-- Softmax returns finite values summing to one even for large logits.
-- A future value vector cannot affect the attention output at an earlier position.
-- Invalid shapes and token IDs return errors instead of panicking.
-- The model returns a normalized distribution over its toy vocabulary.
+| Mathematics | Go implementation | Test / check |
+|---|---|---|
+| \(E[w_i]+p_i\) | `model.go`, `Forward` | token ID bounds |
+| \(W_Qx_i,W_Kx_i,W_Vx_i\) | `MatVec` calls in `Forward` | rectangular shapes |
+| masked \(q_i^\top k_j/\sqrt{d_k}\) | `attention.go`, `CausalAttention` | future-value invariance |
+| stable softmax | `math.go`, `Softmax` | large-logit test |
+| \(W_2\operatorname{ReLU}(W_1x)\) | `relu` and `MatVec` calls | feed-forward shapes |
+| \(Uh_t\) and vocabulary probabilities | final `MatVec` and `Softmax` | normalized output |
 
-These test mathematical invariants of the demo. They do **not** establish that a language model is well-trained or linguistically capable.
+## What is not implemented
 
-## Scope of the Go implementation
+- tokenizer, text normalization, or ID vocabulary file;
+- gradient calculation, backpropagation, optimizer, or training data;
+- batching, checkpoint save/load, GPU kernels, or optimized tensor storage;
+- configurable multi-head/multi-layer architecture or normalization;
+- RoPE, decoding controls, generation loop, or KV cache.
 
-This is a forward-pass teaching model, not a full LLM implementation. It does not include:
+The fixed `DemoModel` parameters are selected for reproducibility. Structurally valid probabilities do not imply semantic validity. The [inference-readiness roadmap](inference-readiness.md) lists the concrete work required before this could load a trained checkpoint and generate text.
 
-- text normalization or a tokenizer;
-- gradient calculation, backpropagation, or parameter updates;
-- a corpus loader, batching, checkpointing, GPU execution, or efficient tensor kernels;
-- multi-head or multi-layer configuration;
-- RoPE, KV caching, sampling strategies, or a pretrained checkpoint.
+## Suggested exercises
 
-The parameters in `DemoModel` are fixed, small values selected to make execution reproducible. Thus the output probabilities are structurally real but semantically meaningless. A credible training implementation would need a tokenizer, data pipeline, autodiff, optimizer, validation, and enough compute/data; pretending a 100-line demo did all that would be theatre.
-
-For the concrete work required to cross that gap, see [Inference readiness](inference-readiness.md).
-
-## Suggested extensions
-
-1. Add a second attention head and concatenate its output before `WO`.
-2. Add a normalization layer and compare pre-norm with post-norm.
-3. Implement scalar reverse-mode autodiff, then use it to train a tiny next-token model.
-4. Replace sinusoidal positions with RoPE and test how relative displacement affects scores.
-5. Add a real tokenizer and a tiny corpus only after the forward pass and gradients are independently verified.
+1. Add a function that returns attention weights for inspection, then test every row sums to one.
+2. Add a second head with a different value width and concatenate outputs before `WO`.
+3. Add a normalization function, explicitly choose pre-norm or post-norm, and test its numerical behavior.
+4. Implement cached decoding only after an uncached generation loop exists; compare logits within a stated tolerance.

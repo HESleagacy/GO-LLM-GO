@@ -1,87 +1,97 @@
-# 2. Context and learned weighted averaging
+# 2. Causal self-attention
 
-This page follows source sections 4–5. The central operation is a weighted sum whose weights depend on the current input representations.
+**Question:** Given a state at position \(i\), which earlier states should contribute, and what information should each contribute?
 
-## 2.1 From scores to a contextual representation
+Breeden §§4–5 introduce learned weighted averaging. The standard scaled dot-product form and explicit mask below follow Vaswani et al. (2017).
 
-For a query position \(i\), let \(v_j\) be the content vector available at each context position \(j\). A weighted sum is:
+![Causal self-attention computation](../assets/images/causal-attention.svg){ .diagram }
 
-\[
-z_i=\sum_{j=1}^{n}\alpha_{ij}v_j,
-\qquad \alpha_{ij}\ge 0,\qquad \sum_j\alpha_{ij}=1.
-\]
+<p class="diagram-caption">Figure 2. One head computes compatibility with Q and K, then transports content through V. Future scores are masked before softmax.</p>
 
-The weights are row-specific: position \(i\) can combine the same context differently from position \(r\). A raw score \(s_{ij}\) measures compatibility; softmax makes the scores into normalized weights.
+## Projection roles and shapes
 
-## 2.2 Three learned projections
-
-Given input state \(x_i\), calculate:
+For input states \(x_i\in\mathbb R^d\), learned maps produce
 
 \[
-q_i=W_Qx_i,\qquad k_j=W_Kx_j,\qquad v_j=W_Vx_j.
+q_i=W_Qx_i,\qquad k_j=W_Kx_j,\qquad v_j=W_Vx_j,
 \]
 
-The paper writes these as \(a_i=W^Ax_i\), \(b_j=W^Bx_j\), and \(c_j=W^Cx_j\). The projections serve different computational roles:
+with \(W_Q,W_K\in\mathbb R^{d_k\times d}\), \(W_V\in\mathbb R^{d_v\times d}\), \(q_i,k_j\in\mathbb R^{d_k}\), and \(v_j\in\mathbb R^{d_v}\).
 
-- query \(q_i\): the features used by position \(i\) to compare context positions;
-- key \(k_j\): the features from position \(j\) used in that comparison;
-- value \(v_j\): the features from position \(j\) that get mixed into the output.
+**Intuition:** a query describes what position \(i\) is looking for, a key describes what position \(j\) offers for matching, and a value carries the content to copy or blend. These are names for learned linear maps, not a literal database or conscious search.
 
-The names do not imply that the model has a literal database. They are conventional labels for three learned linear maps.
+## Scores, mask, and weights
 
-## 2.3 Scaled dot products and softmax
-
-The usual score and weight are:
+The compatibility score is
 
 \[
-s_{ij}=\frac{q_i^\top k_j}{\sqrt{d_k}},\qquad
-\alpha_{ij}=\frac{\exp(s_{ij})}{\sum_{r\in A_i}\exp(s_{ir})},\qquad
-z_i=\sum_{j\in A_i}\alpha_{ij}v_j.
+s_{ij}=\frac{q_i^\top k_j}{\sqrt{d_k}}.
 \]
 
-Here \(A_i\) is the set of positions visible to position \(i\). In a bidirectional encoder it may include all positions; in a decoder-only language model it includes only \(j\le i\). The denominator must use the same allowed set.
+The division by \(\sqrt{d_k}\) keeps typical dot-product magnitudes from growing with width, which helps keep softmax gradients usable. For a decoder-only model, impose causality before normalization:
 
-The scaling dimension is **key width** \(d_k\), not necessarily the symbol \(k\) used by the paper. Scaling keeps dot-product magnitudes from growing with width. A numerically stable implementation subtracts the largest allowed score before exponentiating; this changes no softmax probabilities.
+\[
+\widetilde s_{ij}=\begin{cases}
+s_{ij},&j\le i,\\
+-\infty,&j>i.
+\end{cases}
+\qquad
+\alpha_{ij}=\frac{e^{\widetilde s_{ij}}}{\sum_{r\le i}e^{\widetilde s_{ir}}}.
+\]
 
-## 2.4 Why separate maps matter
+The mask is not an annotation. It changes the denominator, so a future position has exactly zero attention weight in the mathematical idealization.
 
-If raw vectors were compared directly using \(x_i^\top x_j\), the score would be symmetric. Separate learned projections allow the compatibility from \(i\) to \(j\) to differ from the reverse comparison. Separating \(W_K\) and \(W_V\) also lets the model use one feature set to decide *which position matters* and another feature set to determine *what content it contributes*.
+![Causal visibility matrix](../assets/images/causal-visibility.svg){ .diagram }
 
-The score can be rewritten as a bilinear form:
+<p class="diagram-caption">Figure 3. Row \(i\) may read columns \(j\le i\), never a future token. Inference uses the same rule one new position at a time.</p>
+
+The output is the weighted value sum
+
+\[
+z_i=\sum_{j\le i}\alpha_{ij}v_j\in\mathbb R^{d_v}.
+\]
+
+For all positions, \(Q,K\in\mathbb R^{n\times d_k}\), \(V_{\rm val}\in\mathbb R^{n\times d_v}\), the score and weight matrices are \(n\times n\), and the output is \(Z\in\mathbb R^{n\times d_v}\).
+
+## Numerically stable softmax
+
+Directly computing \(e^{s_j}\) can overflow. Let \(m=\max_j s_j\) over the **allowed** row. Then
+
+\[
+\operatorname{softmax}(s)_j
+=\frac{e^{s_j-m}}{\sum_r e^{s_r-m}}.
+\]
+
+Subtracting one constant leaves every ratio unchanged. For scores \((1000,1001,999)\), use \((-1,0,-2)\) instead; the resulting probabilities are finite and sum to one. This is the operation tested by `Softmax` in `math.go`.
+
+## Worked weighted sum
+
+If \(v_1=(1,0)\), \(v_2=(0,2)\), and \(\alpha=(0.25,0.75)\), then
+
+\[
+z=0.25(1,0)+0.75(0,2)=(0.25,1.5).
+\]
+
+The output is a convex combination: it lies in the line segment between the values. The query-key scores decide the coefficients; the values decide what is transported. The complete numerical path, including logits, is in the [end-to-end example](../worked-example.md).
+
+## What attention does not prove
+
+Separate \(W_Q\) and \(W_K\) allow directional compatibility:
 
 \[
 q_i^\top k_j=x_i^\top W_Q^\top W_Kx_j.
 \]
 
-This is a parameterized compatibility function. If the projected width is smaller than the model width, the induced matrix has rank at most \(d_k\). That is a property of this factorization; it does not make the learned features automatically interpretable.
+The weights are useful computational diagnostics, but they are not by themselves a complete explanation of a prediction. Residual streams, later layers, nonlinearities, and output weights also contribute. “Attention is explanation” is an interpretive claim, not a consequence of the weighted-sum equation.
 
-## 2.5 Causality is a mask, not a hope
+## Go connection and invariant
 
-During next-token training, the representation at position \(i\) must not depend on later ground-truth tokens. Define:
+`CausalAttention` in `go/minillm/attention.go` materializes scores only for `j <= i`, calls stable `Softmax`, and accumulates `weight * value`. `TestCausalAttentionDoesNotReadFutureValues` changes only a future value row and verifies that earlier output rows do not change. It also verifies that the final row can change, so the test is not merely checking a constant output.
 
-\[
-s_{ij}=\begin{cases}
-q_i^\top k_j/\sqrt{d_k},&j\le i,\\
--\infty,&j>i.
-\end{cases}
-\]
+## Self-check
 
-Then softmax assigns exactly zero weight to future positions. The paper's main attention explanation describes mixing over context generally; its final summary shows \(j\le i\) for the decoder case. The Go implementation applies this causal mask explicitly.
+1. Why must the mask be applied before the softmax denominator is formed?
+2. What are the shapes of \(QK^\top\) and \(AV_{\rm val}\)?
+3. If all allowed scores are equal, what are the weights at position \(i\)?
 
-## 2.6 What the weights do not mean
-
-The coefficients \(\alpha_{ij}\) are useful to inspect as part of the computation. They are not, by themselves, a complete causal explanation of why a model produced a token or a reliable measure of human-style importance. Later layers, residual paths, nonlinearities, and output weights all affect the prediction.
-
-## Tiny numerical example
-
-Suppose two allowed value vectors are \(v_1=(1,0)\) and \(v_2=(0,2)\), with weights \((0.25,0.75)\). Then:
-
-\[
-z=0.25v_1+0.75v_2=(0.25,1.5).
-\]
-
-The output is a convex combination because the weights are non-negative and sum to one. The query/key calculation is what learns those weights; the weighted sum transports the value content.
-
-## Go connection
-
-`CausalAttention` computes one row at a time. It masks positions after the query position, applies stable softmax to the remaining scores, then sums the values. The tests check that a future token cannot change an earlier position's attention output.
+<small>Source: Breeden §§4–5. Primary reference: Vaswani et al., [*Attention Is All You Need*](https://arxiv.org/abs/1706.03762), §3.2.1.</small>

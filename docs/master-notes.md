@@ -1,43 +1,35 @@
 # Master Notes
 
-This is the main route through the source paper. The paper is an explanatory overview, not a report of a new model or experiment. The notes preserve its teaching sequence while checking the math and separating intuition from formal guarantees.
+## The argument in one page
 
-## Argument in one page
-
-An autoregressive language model assigns a probability to the next token given a prefix:
+The chain rule factors a sequence probability:
 
 \[
-P(w_{t+1}\mid w_1,\ldots,w_t).
+P(w_{1:n})=\prod_{t=1}^{n}P(w_t\mid w_{<t}).
 \]
 
-The model first maps each token to a vector. Each layer then computes context-sensitive vectors by projecting tokens into several learned spaces, comparing positions, normalizing the comparisons into weights, and taking weighted sums. A decoder applies a causal mask so position \(t\) cannot use tokens after \(t\). Repeated layers and nonlinear feed-forward transformations refine the representations. A final linear map produces one score per vocabulary item; softmax turns those scores into a distribution. Training changes the parameters to assign higher probability to observed next tokens.
+A decoder-only model learns one reusable parameterized function for these conditional distributions. It looks up each discrete token in an embedding table, adds position information, and repeatedly transforms the resulting states. In self-attention, query-key compatibility determines which visible positions matter; values carry the content that is averaged. A causal mask enforces \(j\le i\). Feed-forward networks transform each position independently, while residual paths and normalization help organize a deep stack. A vocabulary projection produces logits, and softmax turns those scores into probabilities.
 
-## Navigation by source section
+The equations explain the computation. They do not, by themselves, prove that a head has a named linguistic role, that a high-probability statement is true, or that a trained model performs formal reasoning.
 
-| Paper sections | Notes page | Main question |
+## Navigation by question
+
+| Question | Page | Source / added material |
 |---|---|---|
-| 1–3 | [Text, probability, and embeddings](notes/01-foundations.md) | What is predicted, and how do discrete tokens become vectors? |
-| 4–5 | [Context and weighted averaging](notes/02-context-attention.md) | How can a token representation depend on other positions? |
-| 6–7 | [Multiple relations and depth](notes/03-relations-depth.md) | Why use parallel attention subspaces and stacked layers? |
-| 8–9 | [Position and next-token probabilities](notes/04-position-output.md) | How does order enter, and how do scores become probabilities? |
-| 10 | [Training the parameters](notes/05-training.md) | What objective adjusts the model's parameters? |
-| 11–13 | [Interpretation and claims](notes/06-interpretation.md), [equations](notes/07-equations.md) | What can be inferred from the mechanism, and what cannot? |
+| What is predicted, and how do IDs become vectors? | [Foundations](notes/01-foundations.md) | Breeden §§1–3; embedding clarification |
+| How does one position use context? | [Attention](notes/02-context-attention.md) | Breeden §§4–5; Vaswani et al. |
+| Why heads, depth, residuals, and norms? | [Depth](notes/03-relations-depth.md) | Breeden §§6–7; architecture variants |
+| How does order enter and how are scores decoded? | [Position and output](notes/04-position-output.md) | Breeden §§8–9; RoPE reference |
+| How are parameters fitted and used? | [Training](notes/05-training.md) | Breeden §10; cache clarification |
+| What claims are safe? | [Interpretation](notes/06-interpretation.md) | Breeden §§11–13; claim labels |
+| Can I check the algebra? | [Worked example](worked-example.md) | New, reproducible calculation |
 
-## Notation used here
+## Notation contract
 
-- \(V\): vocabulary; \(|V|\): its number of token IDs.
-- \(d\): model/embedding width; \(d_k\): query/key width; \(d_v\): value width.
-- \(x_i\in\mathbb R^d\): representation at position \(i\).
-- \(W_Q,W_K,W_V\): query, key, and value projections. The source paper calls these \(W^A,W^B,W^C\), describing their roles as receptive features, influence features, and content features.
-- \(W_O\): output projection after concatenating parallel attention heads.
-- \(L\): number of layers; \(H\): number of parallel heads.
+The model width is \(d\), key/query width is \(d_k\), value width is \(d_v\), sequence length is \(n\), vocabulary size is \(|V|\), layers are \(L\), and heads are \(H\). See [Notation and dimensions](notation.md) for every matrix shape. The paper uses 1-based indices; Go uses 0-based indices.
 
-The conventional Q/K/V names are included because they are used throughout software and research. The source's less metaphorical names remain useful for understanding the computation. Neither naming scheme changes the equations.
+The paper denotes the three attention maps as \(W^A,W^B,W^C\); these notes use the conventional \(W_Q,W_K,W_V\). They are the same roles under different names.
 
-## Go implementation route
+## One important boundary
 
-The [Go Lab](go-lab.md) implements one causal self-attention head plus the surrounding operations needed to produce vocabulary probabilities. Read each code function next to the equation it implements. The code is intentionally small enough to audit line by line.
-
-## Reading rule
-
-When a statement is an intuition, it is presented as intuition. When a statement is a mathematical consequence, its assumptions are stated. The [source notes](source-notes.md) call out paper passages that are useful pedagogically but too broad if read as universal technical facts.
+The repository's Go model is a transparent forward pass, not a small trained language model. It has no tokenizer, corpus, automatic differentiation, optimizer, checkpoint, generation loop, or KV cache. A normalized output vector proves only that the implemented softmax is a distribution; it says nothing about language quality.

@@ -1,31 +1,38 @@
-# The Mathematics of LLMs, worked through in Go
+# Mathematics of LLMs, worked through in Go
 
-This guide unpacks the uploaded paper *The Simple Mathematics of Large Language Models* by Joseph L. Breeden. It follows the paper's path from discrete tokens to conditional probabilities, then adds small Go implementations that make the central operations concrete.
+This is a source-grounded learning path through Joseph L. Breeden's *The Simple Mathematics of Large Language Models*, with technical clarifications and a dependency-free Go forward-pass demonstration. It treats a decoder-only Transformer as a chain of ordinary operations: lookup, projection, dot product, masking, softmax, weighted sums, nonlinear transformations, and a final classifier.
 
-The running model is deliberately tiny. Its job is to expose the mechanics: vectors, projections, causal masking, weighted sums, residual paths, and output probabilities. It is not a trained or production language model.
+![Full decoder-only data path](assets/images/full-data-path.svg){ .diagram }
 
-## Start here
+<p class="diagram-caption">Figure 1. The full path from token IDs to a distribution. The final decoding rule is outside the model's probability calculation.</p>
 
-1. Read the [Master Notes](master-notes.md) for the paper's argument and navigation.
-2. Work through the [concept notes](notes/01-foundations.md) in order.
-3. Run the [Go Lab](go-lab.md) and inspect each operation against its equation.
-4. Use the [equation reference](notes/07-equations.md) for a compact recap.
-5. Use [Inference readiness](inference-readiness.md) as the checklist for turning the demo into a small, usable model.
-6. Read [Source and scope](source-notes.md) for corrections and claims that need qualification.
+## The learning path
 
-## What this guide teaches
+1. Start with [tokens, the chain rule, and embeddings](notes/01-foundations.md).
+2. Work through [causal self-attention](notes/02-context-attention.md), including the [visibility matrix](assets/images/causal-visibility.svg).
+3. Study [heads, stacked blocks, residuals, and normalization](notes/03-relations-depth.md).
+4. Compare [position methods, logits, probabilities, and decoding](notes/04-position-output.md).
+5. Follow [training and inference](notes/05-training.md), then verify every number in the [end-to-end example](worked-example.md).
+6. Keep [notation](notation.md), the [glossary](glossary.md), and the [equation reference](notes/07-equations.md) nearby.
 
-- A language model estimates the next-token conditional distribution.
-- Learned embeddings turn token IDs into vectors that can be transformed.
-- Self-attention forms a weighted sum of projected token representations.
-- A causal mask prevents a decoder from using future tokens.
-- Stacking attention and nonlinear transformations creates deeper context-dependent features.
-- Training adjusts parameters to reduce next-token negative log-likelihood.
+## What the model answers
 
-## What it does not pretend
+Given a prefix \(w_{1:t}\), an autoregressive language model produces
 
-The Go program is a forward-pass demonstration with deterministic toy weights. It does not contain tokenizer training, automatic differentiation, optimizer code, data loading, GPU kernels, or pretrained parameters. A handful of hand-set numbers can demonstrate equations; they cannot conjure a competent LLM. See [the implementation boundary](go-lab.md#scope-of-the-go-implementation).
+\[
+P_\theta(w_{t+1}=v\mid w_{1:t})\quad\text{for every }v\in V.
+\]
 
-## Source
+It does not directly output “the next word.” It outputs a distribution. Greedy choice, temperature, top-k, and nucleus sampling are separate decoding policies applied after that distribution exists.
 
-All paper-specific explanations are grounded in Breeden's uploaded 20-page PDF. Additional notes are labeled as **Correction**, **Nuance**, or **Implementation note** so the paper's statements are not silently mixed with general technical clarification.
+## What the Go program demonstrates
+
+`go/minillm` implements one causal attention head, sinusoidal absolute positions, two residual additions, a ReLU feed-forward transformation, vocabulary logits, and stable softmax. `DemoModel` contains fixed toy parameters. It is not trained, does not tokenize text, does not generate a meaningful continuation, and is not inference-ready. The [Go Lab](go-lab.md) maps each step to code and tests.
+
+## How to read claims
+
+- <span class="source-label">Source statement</span>: a paraphrase of Breeden's supplied paper, cited by section.
+- <span class="source-label">Mathematical consequence</span>: follows from an equation and its stated assumptions.
+- <span class="limit-label">Technical clarification</span>: added from standard Transformer references or from inspecting this repository.
+
+The supplied PDF is not stored in this checkout, so page-level citations cannot be independently checked here. Source section numbers are retained from the existing project audit; primary references for added material appear on [Source and scope](source-notes.md).
