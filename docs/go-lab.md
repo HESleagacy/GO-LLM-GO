@@ -30,6 +30,8 @@ go run ./cmd/demo
 
 The demo prints five probabilities whose sum is close to `1.000000`. The numbers are deterministic smoke-test output from fixed toy weights. They are not language predictions, benchmark results, or a trained SLM.
 
+`go run ./cmd/export` writes the same `DemoModel` parameters, per-position states, final logits, and probabilities as JSON. The [PyTorch side-by-side lab](pytorch-lab.md#milestone-6-parity-with-the-go-model) loads that file to check that an independent implementation matches the Go numbers.
+
 ## Attention invariant
 
 `CausalAttention` accepts `q`, `k`, and `v` matrices with shapes `[sequence, keyWidth]`, `[sequence, keyWidth]`, and `[sequence, valueWidth]`. For each row `i`, it materializes a score vector of length `i+1`; future positions are never passed to softmax. `TestCausalAttentionDoesNotReadFutureValues` changes only the value at position 2 and verifies positions 0 and 1 are unchanged while position 2 can change.

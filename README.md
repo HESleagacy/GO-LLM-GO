@@ -18,7 +18,10 @@ An educational documentation site and a dependency-free Go forward-pass demonstr
 cd go
 go test ./...
 go run ./cmd/demo
+go run ./cmd/export > demo_reference.json
 ```
+
+`cmd/export` writes the demo weights and reference outputs as JSON for the PyTorch parity check described in the docs.
 
 The Go code is an inspectable teaching model. It does **not** train a language model, include a tokenizer, or claim to reproduce a pretrained LLM. Its initialized weights are deterministic demonstration values, so generated probabilities are not meaningful language predictions.
 
