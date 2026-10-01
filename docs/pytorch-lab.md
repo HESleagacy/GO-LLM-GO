@@ -24,18 +24,19 @@ touch src/llm_lab/__init__.py
 
 On a machine without a GPU, `python -m pip install torch --index-url https://download.pytorch.org/whl/cpu` installs a much smaller CPU-only build.
 
-The finished layout after Milestone 8 is:
+The finished layout after Milestone 11 is:
 
 ```text
 llm-learning-lab/
 ├── src/llm_lab/
 │   ├── __init__.py
-│   ├── attention.py        Milestone 1
-│   ├── model.py            Milestones 2–3
+│   ├── attention.py        Milestones 1, 9, 10
+│   ├── model.py            Milestones 2–3, 9, 10
 │   ├── training.py         Milestones 4–5
 │   ├── go_parity.py        Milestone 6
-│   ├── generation.py       Milestone 7
-│   └── checkpoint.py       Milestone 8
+│   ├── generation.py       Milestones 7, 10
+│   ├── checkpoint.py       Milestone 8
+│   └── tokenizer.py        Milestone 11
 ├── tests/
 │   ├── fixtures/demo_reference.json
 │   ├── test_pytorch_basics.py
@@ -45,7 +46,10 @@ llm-learning-lab/
 │   ├── test_gradients.py
 │   ├── test_go_parity.py
 │   ├── test_generation.py
-│   └── test_checkpoint.py
+│   ├── test_checkpoint.py
+│   ├── test_multi_head.py
+│   ├── test_kv_cache.py
+│   └── test_tokenizer.py
 ├── experiments/
 │   └── train_repeating.py
 ├── notebooks/
@@ -829,20 +833,312 @@ def test_rejects_non_finite_weights(tmp_path):
 
 At this point the suite has 21 passing tests (4 from Milestone 0, 3 from the gradient section, and 14 from Milestones 1–8).
 
+## Milestone 9: multi-head attention
+
+**Reason:** one head computes one weighting of the past per position. Several heads let different relations (for example "previous token" and "same token earlier") be tracked at the same time, at the same total cost.
+
+With width \(d\) and \(h\) heads, each head works on its own slice of \(d/h\) coordinates of Q, K and V:
+
+1. **Split:** `[batch, sequence, width]` → `[batch, heads, sequence, width/heads]`.
+2. **Attend:** run `causal_attention` unchanged. It already works on any leading dimensions, and its \(\sqrt{d_k}\) now uses the head width.
+3. **Merge:** move heads back and concatenate → `[batch, sequence, width]`.
+4. **Mix:** the existing `attention_output` layer (\(W_O\)) combines information across heads.
+
+Add to `src/llm_lab/attention.py`:
+
+```python
+def split_heads(x: torch.Tensor, heads: int):
+    batch, length, width = x.shape
+    if width % heads:
+        raise ValueError(f"width {width} is not divisible by {heads} heads")
+    return x.view(batch, length, heads, width // heads).transpose(1, 2)
+
+
+def merge_heads(x: torch.Tensor):
+    batch, heads, length, head_width = x.shape
+    return x.transpose(1, 2).reshape(batch, length, heads * head_width)
+
+
+def multi_head_causal_attention(q, k, v, heads: int):
+    context, weights = causal_attention(
+        split_heads(q, heads), split_heads(k, heads), split_heads(v, heads)
+    )
+    return merge_heads(context), weights
+
+
+def attend_to_past(q, k, v):
+    scores = q @ k.transpose(-2, -1) / math.sqrt(q.size(-1))
+    return torch.softmax(scores, dim=-1) @ v
+```
+
+`attend_to_past` is used by Milestone 10. In `model.py`, add a `heads=1` argument, store it in `config()`, and call `multi_head_causal_attention(q, k, v, self.heads)` instead of `causal_attention`. The complete file is in Milestone 10. With the default `heads=1` the Go parity test must still pass unchanged.
+
+Create `tests/test_multi_head.py`:
+
+```python
+import torch
+
+from llm_lab.attention import (
+    causal_attention,
+    merge_heads,
+    multi_head_causal_attention,
+    split_heads,
+)
+
+
+def test_split_and_merge_are_inverse():
+    x = torch.randn(2, 5, 8)
+    assert split_heads(x, 4).shape == (2, 4, 5, 2)
+    assert torch.equal(merge_heads(split_heads(x, 4)), x)
+
+
+def test_one_head_equals_single_head_attention():
+    q, k, v = torch.randn(3, 2, 6, 8).unbind(0)
+    expected, _ = causal_attention(q, k, v)
+    actual, _ = multi_head_causal_attention(q, k, v, heads=1)
+    assert torch.allclose(actual, expected)
+
+
+def test_each_head_attends_on_its_own_slice():
+    q, k, v = torch.randn(3, 1, 4, 6).unbind(0)
+    output, weights = multi_head_causal_attention(q, k, v, heads=2)
+    assert weights.shape == (1, 2, 4, 4)
+    second, _ = causal_attention(q[..., 3:], k[..., 3:], v[..., 3:])
+    assert torch.allclose(output[..., 3:], second)
+
+
+def test_multi_head_is_still_causal():
+    q, k, v = torch.randn(3, 1, 5, 8).unbind(0)
+    changed = v.clone()
+    changed[:, -1] += 100.0
+    first, _ = multi_head_causal_attention(q, k, v, heads=4)
+    second, _ = multi_head_causal_attention(q, k, changed, heads=4)
+    assert torch.equal(first[:, :-1], second[:, :-1])
+```
+
+**Exit check:** 4 tests pass and `test_go_parity.py` still passes. The third test is the key one: with 2 heads, the second half of the output depends only on the second half of Q, K and V.
+
+## Milestone 10: KV cache
+
+**Reason:** `greedy_generate` recomputes every earlier position at every step, so generating \(n\) tokens costs about \(n^2\) position computations. A cache keeps each position's key and value rows, so a new token computes only its own row.
+
+This is valid because of causality: the key and value of position \(j\) depend only on tokens \(0..j\), so they never change when tokens are appended. One generation step with a cache:
+
+1. Embed the new token and add the position vector for its index.
+2. Compute its \(q\), \(k\), \(v\) (one row each).
+3. Append \(k\) and \(v\) to the cache along the sequence dimension.
+4. Attend from the single \(q\) to *all* cached keys. No mask is needed, because everything in the cache is in the past.
+5. Apply the residuals, the feed-forward layer, and the output layer to that one row.
+
+The complete `src/llm_lab/model.py` after Milestones 9 and 10. `_finish` is shared by both paths so the residual order cannot drift between them:
+
+```python
+import torch
+from torch import nn
+from torch.nn import functional as F
+
+from .attention import attend_to_past, merge_heads, multi_head_causal_attention, split_heads
+
+
+def sinusoidal_positions(length: int, width: int, device, dtype):
+    positions = torch.arange(length, device=device, dtype=dtype).unsqueeze(1)
+    indices = torch.arange(width, device=device)
+    exponent = (2 * torch.div(indices, 2, rounding_mode="floor")) / width
+    angles = positions / (10000.0 ** exponent)
+    result = torch.empty(length, width, device=device, dtype=dtype)
+    result[:, 0::2] = torch.sin(angles[:, 0::2])
+    result[:, 1::2] = torch.cos(angles[:, 1::2])
+    return result
+
+
+class TinyDecoder(nn.Module):
+    def __init__(self, vocabulary, width, hidden, heads=1):
+        super().__init__()
+        self.vocabulary = vocabulary
+        self.width = width
+        self.hidden = hidden
+        self.heads = heads
+        self.embedding = nn.Embedding(vocabulary, width)
+        self.query = nn.Linear(width, width, bias=False)
+        self.key = nn.Linear(width, width, bias=False)
+        self.value = nn.Linear(width, width, bias=False)
+        self.attention_output = nn.Linear(width, width, bias=False)
+        self.feed_forward_in = nn.Linear(width, hidden, bias=False)
+        self.feed_forward_out = nn.Linear(hidden, width, bias=False)
+        self.output = nn.Linear(width, vocabulary, bias=False)
+
+    def config(self):
+        return {
+            "vocabulary": self.vocabulary,
+            "width": self.width,
+            "hidden": self.hidden,
+            "heads": self.heads,
+        }
+
+    def _finish(self, states, context):
+        states = states + self.attention_output(context)
+        return states + self.feed_forward_out(F.relu(self.feed_forward_in(states)))
+
+    def states(self, token_ids):
+        length = token_ids.size(-1)
+        states = self.embedding(token_ids)
+        states = states + sinusoidal_positions(
+            length, self.width, states.device, states.dtype
+        )
+        q = self.query(states)
+        k = self.key(states)
+        v = self.value(states)
+        context, weights = multi_head_causal_attention(q, k, v, self.heads)
+        return self._finish(states, context), weights
+
+    def forward(self, token_ids):
+        states, weights = self.states(token_ids)
+        return self.output(states), weights
+
+    def step(self, token_id, position, cache=None):
+        state = self.embedding(token_id)
+        state = state + sinusoidal_positions(
+            position + 1, self.width, state.device, state.dtype
+        )[position]
+        q = self.query(state)
+        k = self.key(state)
+        v = self.value(state)
+        if cache is not None:
+            k = torch.cat([cache["k"], k], dim=1)
+            v = torch.cat([cache["v"], v], dim=1)
+        context = merge_heads(
+            attend_to_past(
+                split_heads(q, self.heads),
+                split_heads(k, self.heads),
+                split_heads(v, self.heads),
+            )
+        )
+        state = self._finish(state, context)
+        return self.output(state)[:, -1], {"k": k, "v": v}
+```
+
+Add to `src/llm_lab/generation.py`. It feeds tokens one at a time through `step` and returns logits with the same shape as `model(token_ids)`:
+
+```python
+@torch.no_grad()
+def cached_logits(model, token_ids):
+    model.eval()
+    cache = None
+    rows = []
+    for position in range(token_ids.size(1)):
+        logits, cache = model.step(token_ids[:, position : position + 1], position, cache)
+        rows.append(logits)
+    return torch.stack(rows, dim=1)
+```
+
+Create `tests/test_kv_cache.py`:
+
+```python
+import torch
+
+from llm_lab.generation import cached_logits
+from llm_lab.model import TinyDecoder
+
+
+def test_cached_logits_match_full_recompute():
+    torch.manual_seed(0)
+    model = TinyDecoder(vocabulary=11, width=16, hidden=32, heads=4)
+    token_ids = torch.randint(0, 11, (1, 12))
+    with torch.no_grad():
+        full, _ = model(token_ids)
+    cached = cached_logits(model, token_ids)
+    assert cached.shape == full.shape
+    assert (cached - full).abs().max().item() < 1e-6
+
+
+def test_cache_grows_by_one_row_per_token():
+    model = TinyDecoder(vocabulary=5, width=8, hidden=8, heads=2)
+    cache = None
+    with torch.no_grad():
+        for position, token in enumerate([1, 3, 2]):
+            _, cache = model.step(torch.tensor([[token]]), position, cache)
+            assert cache["k"].shape == (1, position + 1, 8)
+```
+
+**Exit check:** 2 tests pass. Cached logits match full recomputation at *every* position within \(10^{-6}\) in `float32`, not just the final one. This cache is valid only while the sequence fits the context limit. Sliding the window would change every cached position index, so the cache must then be rebuilt.
+
+## Milestone 11: a real tokenizer
+
+**Reason:** until now token IDs were invented integers. A tokenizer is the exact, reversible map between text and IDs, and the model is tied to it: the same text must always produce the same IDs.
+
+Start with a byte-level tokenizer. UTF-8 already turns any text into bytes 0–255, so it needs no training, never meets an unknown character, and round-trips exactly. Add one special ID, 256, for end-of-sequence.
+
+Create `src/llm_lab/tokenizer.py`:
+
+```python
+class ByteTokenizer:
+    eos_id = 256
+    vocabulary = 257
+
+    def encode(self, text: str, add_eos: bool = False):
+        ids = list(text.encode("utf-8"))
+        return ids + [self.eos_id] if add_eos else ids
+
+    def decode(self, ids):
+        data = bytes(i for i in ids if i != self.eos_id)
+        return data.decode("utf-8", errors="replace")
+```
+
+Create `tests/test_tokenizer.py`:
+
+```python
+import pytest
+
+from llm_lab.tokenizer import ByteTokenizer
+
+SAMPLES = ["", "Hello, world!", "  tabs\tand\nnewlines  ", "नमस्ते", "日本語", "naïve café 🙂"]
+
+
+@pytest.mark.parametrize("text", SAMPLES)
+def test_round_trip(text):
+    tokenizer = ByteTokenizer()
+    assert tokenizer.decode(tokenizer.encode(text)) == text
+
+
+def test_eos_is_outside_byte_range():
+    tokenizer = ByteTokenizer()
+    ids = tokenizer.encode("hi", add_eos=True)
+    assert ids == [104, 105, 256]
+    assert tokenizer.decode(ids) == "hi"
+
+
+def test_token_count_depends_on_script():
+    tokenizer = ByteTokenizer()
+    assert len(tokenizer.encode("hello")) == 5
+    assert len(tokenizer.encode("नमस्ते")) == 18
+    assert len(tokenizer.encode("日本語")) == 9
+```
+
+**Exit check:** 8 tests pass. The last test shows the cost: "hello" is 5 tokens, but "नमस्ते" (6 characters) is 18 and "日本語" (3 characters) is 9, because those characters take 3 bytes each in UTF-8. Longer sequences mean less text fits in the context and more compute per sentence. This is the fragmentation confounder mentioned in the [language-effect benchmark](notes/06-interpretation.md#how-to-benchmark-the-effect-of-language).
+
+**Byte-pair encoding (BPE)** fixes this by learning merges on top of bytes:
+
+1. Encode the training corpus as bytes.
+2. Count every adjacent pair of IDs.
+3. Replace the most frequent pair everywhere with a new ID (257, 258, …) and record the merge.
+4. Repeat until the vocabulary reaches the target size.
+5. To encode new text, apply the recorded merges in the same order. To decode, expand each ID back into its bytes.
+
+Implement it as `BpeTokenizer` with the same `encode`/`decode` interface and run the same round-trip tests. Then compare token counts per language against `ByteTokenizer`. To train the model on text, set `vocabulary=tokenizer.vocabulary` in `TinyDecoder` and save the tokenizer's merges next to the checkpoint.
+
+At this point the full suite should report `35 passed`.
+
 ## Later milestones
 
-After the eight milestones above pass, add one feature per branch or commit. Each row names the change and the test that must pass before the next row starts.
+After the eleven milestones above pass, add one feature per branch or commit. Each row names the change and the test that must pass before the next row starts.
 
 | # | Change | Where | Exit check |
 |---|---|---|---|
-| 9 | `nn.LayerNorm` before attention and before the feed-forward block (pre-norm) | `model.py` | Every position's normalized vector has mean ≈ 0 and variance ≈ 1; future-token test still passes |
-| 10 | Replace `F.relu` with `F.gelu` | `model.py` | Rerun Milestone 5; record both loss curves in `experiments/runs/` |
-| 11 | `heads` argument: split Q/K/V into `[batch, heads, sequence, width/heads]`, attend per head, concatenate, apply `attention_output` | `attention.py`, `model.py` | With `heads=1` the output equals the single-head model exactly; with `heads>1` the causal test still passes |
-| 12 | `layers` argument: stack blocks in an `nn.ModuleList` | `model.py` | `layers=1` reproduces Milestone 6 parity |
-| 13 | Byte-level or BPE tokenizer with a saved vocabulary file | new `tokenizer.py` | `decode(encode(text)) == text` for ASCII, whitespace, punctuation, and non-ASCII samples |
-| 14 | Small licensed text corpus with train/validation split and minibatches | `training.py` | Validation loss reported every N steps; corpus source, license, and hash recorded in `result.json` |
-| 15 | `temperature`, top-k, and nucleus sampling as functions applied to logits | `generation.py` | Fixed seed gives a fixed sample; temperature → 0 matches greedy; model logits are unchanged |
-| 16 | KV cache: store K and V per layer and feed only the new token | `generation.py`, `model.py` | Cached and uncached logits match at every generated position within \(10^{-6}\) in `float32` |
+| 12 | `nn.LayerNorm` before attention and before the feed-forward block (pre-norm) | `model.py` | Every position's normalized vector has mean ≈ 0 and variance ≈ 1; future-token and cache tests still pass |
+| 13 | Replace `F.relu` with `F.gelu` | `model.py` | Rerun Milestone 5; record both loss curves in `experiments/runs/` |
+| 14 | `layers` argument: stack blocks in an `nn.ModuleList`, one KV cache per layer | `model.py` | `layers=1` reproduces Go parity; cache test passes with `layers=3` |
+| 15 | Small licensed text corpus with train/validation split and minibatches, using the Milestone 11 tokenizer | `training.py` | Validation loss reported every N steps; corpus source, license, and hash recorded in `result.json` |
+| 16 | `temperature`, top-k, and nucleus sampling as functions applied to logits | `generation.py` | Fixed seed gives a fixed sample; temperature → 0 matches greedy; model logits are unchanged |
 | 17 | Multilingual language-effect benchmark | `experiments/` | Follows the [benchmark protocol](notes/06-interpretation.md#how-to-benchmark-the-effect-of-language); reports token counts per language |
 | 18 | Fine-tuning | `experiments/` | Before/after scores on a held-out set that existed before fine-tuning started |
 
