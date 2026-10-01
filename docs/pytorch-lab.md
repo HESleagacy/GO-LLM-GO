@@ -38,9 +38,11 @@ llm-learning-lab/
 │   └── checkpoint.py       Milestone 8
 ├── tests/
 │   ├── fixtures/demo_reference.json
+│   ├── test_pytorch_basics.py
 │   ├── test_attention.py
 │   ├── test_positions.py
 │   ├── test_training.py
+│   ├── test_gradients.py
 │   ├── test_go_parity.py
 │   ├── test_generation.py
 │   └── test_checkpoint.py
@@ -57,6 +59,72 @@ Run every test from the repository root with:
 ```sh
 PYTHONPATH=src pytest -q
 ```
+
+## Milestone 0: PyTorch essentials
+
+**Reason:** every later milestone assumes these five ideas. If one of them is unfamiliar, the bugs it causes look like model bugs.
+
+| Idea | What to know | Go equivalent |
+|---|---|---|
+| Tensor and shape | An n-dimensional array; `x.shape` is the first thing to print when anything goes wrong. `view`/`reshape` change shape without changing data. | `Matrix` / `Vector` |
+| Broadcasting | Size-1 or missing leading dimensions are stretched automatically: `[2,3] + [3]` adds the row to every row. This is how one position table is added to a whole batch. | an explicit loop |
+| `@` on batches | `[batch, n, k] @ [k, m] → [batch, n, m]`: the last two dimensions are multiplied, the rest are looped over. | `MatVec` in a loop |
+| `nn.Linear(in, out)` | Holds `weight` of shape `[out, in]` and computes \(Wx\). | `MatVec(W, x)` |
+| `nn.Module` | A class whose `nn.Linear`/`nn.Embedding` attributes are registered automatically, so `model.parameters()` finds every weight for the optimizer. | the `Model` struct |
+| Autograd | A tensor with `requires_grad=True` records operations; `loss.backward()` fills `.grad` on every such tensor with \(\partial\,\text{loss}/\partial\,\text{tensor}\). Inside `torch.no_grad()` nothing is recorded. | none; Go has no gradients |
+| `dtype` | `float32` is the default; use `float64` when comparing against hand calculations or Go. | always `float64` |
+
+Create `tests/test_pytorch_basics.py` and make it pass before Milestone 1. Each test pins down one row of the table with a number you can check by hand. In the autograd test, \(\frac{d}{dw}(2w-1)^2 = 4(2w-1) = 20\) at \(w=3\).
+
+```python
+import torch
+from torch import nn
+
+
+def test_shapes_and_broadcasting():
+    x = torch.arange(6.0).view(2, 3)
+    assert x.shape == (2, 3)
+    assert x[1].tolist() == [3.0, 4.0, 5.0]
+    row = torch.tensor([10.0, 20.0, 30.0])
+    assert (x + row).tolist() == [[10.0, 21.0, 32.0], [13.0, 24.0, 35.0]]
+    assert (x @ x.T).shape == (2, 2)
+    batch = torch.randn(4, 5, 3)
+    assert (batch @ torch.randn(3, 7)).shape == (4, 5, 7)
+
+
+def test_linear_stores_out_by_in():
+    layer = nn.Linear(3, 2, bias=False)
+    assert layer.weight.shape == (2, 3)
+    x = torch.randn(3)
+    assert torch.allclose(layer(x), layer.weight @ x)
+
+
+def test_autograd_computes_derivatives():
+    w = torch.tensor(3.0, requires_grad=True)
+    loss = (2 * w - 1) ** 2
+    loss.backward()
+    assert w.grad.item() == 2 * 2 * (2 * 3.0 - 1)
+    with torch.no_grad():
+        frozen = w * 2
+    assert not frozen.requires_grad
+
+
+def test_module_registers_parameters():
+    class Pair(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.first = nn.Linear(4, 8)
+            self.second = nn.Linear(8, 2)
+
+        def forward(self, x):
+            return self.second(torch.relu(self.first(x)))
+
+    model = Pair()
+    assert sum(p.numel() for p in model.parameters()) == (4 * 8 + 8) + (8 * 2 + 2)
+    assert model(torch.randn(5, 4)).shape == (5, 2)
+```
+
+**Exit check:** 4 tests pass and you can predict the shape of every result before running it.
 
 ## Milestone 1: causal attention
 
@@ -295,6 +363,87 @@ def test_uniform_logits_give_log_vocabulary():
 
 **Exit check:** both tests pass. If the first one fails, the shift is off by one or the last row is being scored.
 
+### Why training works
+
+Training repeats four lines. Each one has a precise meaning:
+
+| Line | What happens |
+|---|---|
+| `logits, _ = model(tokens)` then `loss = next_token_loss(...)` | Forward pass. Autograd records every operation from the parameters to one scalar loss. |
+| `optimizer.zero_grad(set_to_none=True)` | Clears the previous step's gradients. `.grad` *accumulates* across `backward()` calls, so forgetting this adds stale gradients. |
+| `loss.backward()` | Applies the chain rule backwards through the recorded operations and stores \(\partial\mathcal L/\partial\theta\) in every parameter's `.grad`. |
+| `optimizer.step()` | Moves each parameter a small amount against its gradient. |
+
+**The gradient at the output is simple.** For logits \(\ell\), probabilities \(p=\operatorname{softmax}(\ell)\), and correct class \(y\),
+
+\[
+\frac{\partial\mathcal L}{\partial\ell_v}=p_v-\mathbf 1[v=y].
+\]
+
+The correct logit is pushed up by \(1-p_y\); every wrong logit is pushed down by its own probability. A confident correct prediction produces almost no gradient, which is why loss falls quickly at first and then slowly. Backpropagation passes this signal through `output`, the residual paths, the feed-forward layers, attention, and finally the embedding rows of the tokens that appeared.
+
+**Gradient descent** with learning rate \(\eta\) is
+
+\[
+\theta\leftarrow\theta-\eta\,\frac{\partial\mathcal L}{\partial\theta}.
+\]
+
+For a small enough \(\eta\), this lowers the loss because the gradient is the direction of steepest local increase. Too large an \(\eta\) overshoots and the loss rises or becomes NaN.
+
+**AdamW**, used in Milestone 5, keeps a running mean \(m\) and running mean square \(s\) of each parameter's gradient and steps by \(\eta\,m/(\sqrt{s}+\epsilon)\). That gives every parameter a step of roughly size \(\eta\) regardless of its gradient's scale. The "W" is decoupled weight decay: a separate small shrink \(\theta\leftarrow\theta-\eta\lambda\theta\) that is not mixed into the gradient.
+
+Create `tests/test_gradients.py`. It checks the output-gradient formula above, compares autograd against a finite-difference estimate \(\frac{\mathcal L(w+h)-\mathcal L(w-h)}{2h}\) for every weight of a small layer, and confirms that one manual gradient-descent step lowers the loss:
+
+```python
+import torch
+from torch.nn import functional as F
+
+
+def test_cross_entropy_gradient_is_probabilities_minus_target():
+    logits = torch.tensor([[2.0, 0.5, -1.0]], requires_grad=True)
+    target = torch.tensor([0])
+    F.cross_entropy(logits, target).backward()
+    expected = torch.softmax(logits.detach(), dim=-1) - F.one_hot(target, 3)
+    assert torch.allclose(logits.grad, expected)
+
+
+def test_autograd_matches_finite_differences():
+    torch.manual_seed(0)
+    x = torch.randn(4, dtype=torch.float64)
+    w = torch.randn(3, 4, dtype=torch.float64, requires_grad=True)
+    target = torch.tensor([1])
+
+    def loss_of(weights):
+        return F.cross_entropy((weights @ x).unsqueeze(0), target)
+
+    loss_of(w).backward()
+    step = 1e-6
+    numeric = torch.zeros_like(w)
+    with torch.no_grad():
+        for i in range(3):
+            for j in range(4):
+                plus, minus = w.clone(), w.clone()
+                plus[i, j] += step
+                minus[i, j] -= step
+                numeric[i, j] = (loss_of(plus) - loss_of(minus)) / (2 * step)
+    assert torch.allclose(w.grad, numeric, atol=1e-8)
+
+
+def test_one_gradient_step_lowers_the_loss():
+    torch.manual_seed(0)
+    x = torch.randn(8, 4)
+    target = torch.randint(0, 3, (8,))
+    w = torch.zeros(3, 4, requires_grad=True)
+    before = F.cross_entropy(x @ w.T, target)
+    before.backward()
+    with torch.no_grad():
+        w -= 0.5 * w.grad
+    after = F.cross_entropy(x @ w.T, target)
+    assert after < before
+```
+
+**Exit check:** 3 tests pass. The finite-difference test is the general tool: whenever you write a custom operation, check its gradient this way before trusting it.
+
 ## Milestone 5: train a toy corpus
 
 **Reason:** a synthetic task separates implementation errors from data and modeling difficulty. Use a repeating sequence before natural language.
@@ -519,6 +668,17 @@ def greedy_generate(model, prompt_ids, max_new_tokens, context_limit, eos_id=Non
         if eos_id is not None and next_id.item() == eos_id:
             break
     return ids
+
+
+@torch.no_grad()
+def cached_logits(model, token_ids):
+    model.eval()
+    cache = None
+    rows = []
+    for position in range(token_ids.size(1)):
+        logits, cache = model.step(token_ids[:, position : position + 1], position, cache)
+        rows.append(logits)
+    return torch.stack(rows, dim=1)
 ```
 
 The function rejects an empty prompt and a prompt longer than `context_limit` instead of silently truncating it. During generation it explicitly keeps the last `context_limit` tokens, because sinusoidal positions are defined for any length but the model was only trained on positions below that limit. It recomputes the whole window every step; a KV cache comes later and must reproduce these logits.
@@ -667,7 +827,7 @@ def test_rejects_non_finite_weights(tmp_path):
 
 **Exit check:** 3 tests pass. The round-trip test compares logits with `torch.equal`, not a tolerance: saving and loading must be bit-exact.
 
-At this point the full suite should report `14 passed`.
+At this point the suite has 21 passing tests (4 from Milestone 0, 3 from the gradient section, and 14 from Milestones 1–8).
 
 ## Later milestones
 
